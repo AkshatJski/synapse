@@ -1,17 +1,32 @@
 {
-  "name": "scholarbuild",
+  "name": "synapse",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "verify:arxiv": "node scripts/verify-arxiv.mts"
   },
   "dependencies": {
+    "@base-ui/react": "^1.9.0",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.118.0",
+    "class-variance-authority": "^0.7.1",
+    "cn": "^0.5.0",
+    "fast-xml-parser": "^5.11.2",
+    "highlight.js": "^11.12.0",
+    "lucide-react": "^1.61.0",
     "next": "16.4.2",
+    "next-themes": "^0.4.6",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "sonner": "^2.0.8",
+    "tw-animate-css": "^1.4.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
@@ -20,6 +35,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
+    "shadcn": "^4.22.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
