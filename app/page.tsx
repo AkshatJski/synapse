@@ -1,4 +1,5 @@
 import { ArrowRight, BookOpen, Code2, Layers } from "lucide-react";
+import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,12 +46,12 @@ export default function HomePage() {
         </p>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button size="lg" disabled>
-            Generator lands next
+          <Button size="lg" render={<Link href="/dashboard" />}>
+            Generate a project
             <ArrowRight className="size-4" />
           </Button>
           <span className="text-sm text-muted-foreground">
-            arXiv client is live · <code className="font-mono text-xs">lib/arxiv.ts</code>
+            Free forever · arXiv · Supabase · Groq / Gemini
           </span>
         </div>
       </section>

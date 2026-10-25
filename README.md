@@ -35,13 +35,17 @@ dense abstract into a step-by-step project roadmap you can actually ship.
 
 ## Getting started
 
+**Full walkthrough: [SETUP.md](SETUP.md)** — Supabase project, migration, OAuth,
+and a free Groq/Gemini key.
+
 ```bash
 npm install
 cp .env.example .env.local   # then fill in the keys
 npm run dev
 ```
 
-Open <http://localhost:3000>.
+Open <http://localhost:3000>. Without keys the app still boots and shows a setup
+card instead of crashing.
 
 ### Scripts
 
@@ -56,15 +60,23 @@ Open <http://localhost:3000>.
 
 ```
 app/
-  layout.tsx        root layout, metadata, toaster
-  page.tsx          landing page (RSC)
-  globals.css       Tailwind v4 theme + shadcn tokens
+  layout.tsx            root layout, metadata, header slot, toaster
+  page.tsx              landing page (RSC)
+  login/page.tsx        GitHub OAuth + email magic link (client)
+  auth/callback/route.ts  code -> session exchange
+  dashboard/page.tsx    generator form + saved roadmaps
+  project/[id]/page.tsx project workspace (roadmap / paper / prerequisites)
+  api/generate/route.ts arXiv -> LLM -> Postgres, server-only
+  actions/              server actions (sign out, toggle a step)
 lib/
-  arxiv.ts          typed arXiv Atom client (search + parse)
-  utils.ts          cn() helper
-components/ui/      shadcn primitives
-scripts/
-  verify-arxiv.mts  live smoke check
+  arxiv.ts              typed arXiv Atom client
+  llm.ts                Groq/Gemini transport + JSON repair retry
+  roadmap.ts            zod schema for the LLM contract
+  env.ts                the only place that reads process.env
+  supabase/             browser, server and proxy clients
+components/             UI primitives + feature components
+supabase/migrations/    SQL schema, RLS policies, signup trigger
+scripts/                live smoke checks
 ```
 
 ## Notes on this version
@@ -82,10 +94,11 @@ Version-matched docs ship inside the package: `node_modules/next/dist/docs/`.
 
 - [x] Next.js + Tailwind + shadcn scaffold
 - [x] Typed arXiv client with retry/backoff
-- [ ] Supabase schema, RLS, GitHub OAuth + email login
-- [ ] `/api/generate` — LLM roadmap with strict JSON validation + repair retry
-- [ ] Project workspace with step tracking
+- [x] Supabase schema, RLS, GitHub OAuth + email magic link
+- [x] `/api/generate` — LLM roadmap with strict JSON validation + repair retry
+- [x] Project workspace with step tracking
 - [ ] Public project sharing
+- [ ] Streaming roadmaps (progressive JSON)
 
 ## License
 
