@@ -137,3 +137,6 @@ magic links will land on `localhost` and fail:
 | Magic link lands on `localhost:3000` in production | Site URL still local | Update Supabase URL configuration |
 | Generation returns 404 `NO_PAPER` | Domain + language matched nothing | Use a broader domain |
 | 429 `QUOTA_EXCEEDED` | 10 generations in 24h | Wait, or raise `DAILY_GENERATION_LIMIT` in `app/api/generate/route.ts` |
+| Deploy state is **Blocked**, 0ms build, `errorLink` → `troubleshoot-project-collaboration#account-configuration` | Hobby plan + private repo: the **commit author must be the owner of the Vercel account**. Commits authored as e.g. `dev@synapse.local` cannot be attributed. | Author commits with the email on your Vercel account (`git config user.email …`), or connect GitHub under **Account Settings → Login Connections**. Then push and redeploy. |
+| Env var is set but the app still shows the setup card | `SUPABASE_ANON_KEY` instead of `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Without the `NEXT_PUBLIC_` prefix Next.js never inlines it into the client bundle, so `isSupabaseConfigured()` stays `false`. | Rename the variable, then **redeploy** — env changes never apply to an existing deployment. |
+| `npm run dev` still says "Connect Supabase" after filling `.env.local` | Key typo (`SUPERBASE` vs `SUPABASE`) | Compare the names against `.env.example`; restart the dev server. |
