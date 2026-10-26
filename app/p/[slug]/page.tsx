@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 import { ArrowUpRight, BookOpen, ExternalLink, Eye, FlaskConical, Sparkles } from "lucide-react";
 
 import { MarkdownContent } from "@/components/markdown";
@@ -36,6 +37,13 @@ const FALLBACK_METADATA: Metadata = {
  */
 export async function generateMetadata({ params }: SharePageProps): Promise<Metadata> {
   if (!isSupabaseConfigured()) return FALLBACK_METADATA;
+
+  // Without this, the metadata query is started during the shell-prerender pass
+  // and rejected when that pass finishes ("fetch() rejects when the prerender is
+  // complete"), which made the first visitor to a fresh share link see the
+  // not-found UI. connection() stops prerendering before the query starts
+  // (BUG-015).
+  await connection();
 
   const { slug } = await params;
 
@@ -107,6 +115,10 @@ async function SharedRoadmap({ params }: SharePageProps) {
       </p>
     );
   }
+
+  // Same reason as generateMetadata: the row lookup must not begin during the
+  // prerender pass, or the first request after a deploy loses its data (BUG-015).
+  await connection();
 
   const { slug } = await params;
   const supabase = createPublicClient();
