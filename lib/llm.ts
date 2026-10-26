@@ -17,9 +17,17 @@ import { resolveLlmProvider, type LlmProvider } from "@/lib/env";
 import { normaliseRoadmap, RoadmapSchema, type Roadmap, type SkillLevel } from "@/lib/roadmap";
 
 const REQUEST_TIMEOUT_MS = 45_000;
-const MAX_OUTPUT_TOKENS = 3_000;
+// gpt-oss is a reasoning model: reasoning tokens are billed against
+// max_tokens, so a 3000 budget left ~1800 for the JSON and cut roadmaps off
+// mid-object (BUG-011). The free tier allows 8000 tokens/minute and the prompt
+// is ~1800, so 4500 leaves headroom without earning a 429.
+const MAX_OUTPUT_TOKENS = 4_500;
 const ABSTRACT_CHAR_LIMIT = 4_000;
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+// Groq retired llama-3.3-70b-versatile (HTTP 404 model_not_found on 2026-10-26,
+// see BUG-011). gpt-oss-120b is the strongest chat model on the free tier and
+// accepts both JSON mode and `reasoning_effort`. Keep this overridable: model
+// retirement is a config change, not a code change.
+const GROQ_MODEL = process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
 const GEMINI_MODEL = "gemini-2.5-flash";
 
 export type LlmErrorCode =
@@ -150,6 +158,11 @@ async function callGroq(apiKey: string, messages: ChatMessage[]): Promise<string
       messages,
       temperature: 0.4,
       max_tokens: MAX_OUTPUT_TOKENS,
+      // gpt-oss is a reasoning model and bills reasoning tokens against
+      // max_tokens. "low" keeps the budget for the JSON we actually need; the
+      // free tier allows only 8000 tokens/minute, so a bigger budget plus a
+      // bigger prompt would earn a 429 instead of a roadmap.
+      reasoning_effort: "low",
       // Groq's JSON mode: guarantees parseable JSON, not a guaranteed schema.
       response_format: { type: "json_object" },
     }),
@@ -170,11 +183,37 @@ async function callGroq(apiKey: string, messages: ChatMessage[]): Promise<string
   }
 
   const data = (await response.json()) as {
-    choices?: { message?: { content?: string } }[];
+    choices?: {
+      message?: { content?: string; reasoning?: string };
+      finish_reason?: string;
+    }[];
   };
-  const content = data.choices?.[0]?.message?.content;
+  const choice = data.choices?.[0];
+  const content = choice?.message?.content;
+
+  if (!content && choice?.finish_reason === "length") {
+    throw new LlmError(
+      "PROVIDER_ERROR",
+      "Groq exhausted max_tokens before producing any output (all of it went to reasoning).",
+    );
+  }
   if (!content) {
     throw new LlmError("PROVIDER_ERROR", "Groq returned an empty completion.");
+  }
+  if (choice?.finish_reason === "length") {
+    throw new LlmError("PROVIDER_ERROR", "Groq truncated the response at max_tokens.", {
+      cause: content.slice(-200),
+    });
+  }
+  // A JSON object always closes. If it does not, the response was cut off even
+  // though Groq reported a normal stop — reported as a *semantic* failure so the
+  // one repair retry asks for a shorter roadmap instead of repeating the cut-off.
+  if (!content.includes("}")) {
+    throw new LlmError(
+      "INVALID_OUTPUT",
+      `the response was cut off after ${content.length} chars before the JSON closed; return a shorter roadmap with fewer, more concise code snippets`,
+      { cause: content.slice(-200) },
+    );
   }
   return content;
 }
@@ -246,20 +285,31 @@ async function callProvider(
 /* -------------------------------------------------------------------------- */
 
 /**
- * Strips the things models add even when told not to: ```json fences, a leading
- * "Here is the JSON:", stray trailing commentary.
+ * Strips the things models add even when told not to: a ```json wrapper around
+ * the whole answer, a leading "Here is the JSON:".
+ *
+ * Only an *outer* fence may be removed. An earlier version matched the first
+ * ```...``` pair anywhere in the text, which cut the JSON at the first code
+ * snippet inside a string value — and the schema explicitly asks for code
+ * snippets, so that failed roughly half the time (BUG-011).
+ *
+ * Exported for `scripts/verify-llm-json.mts`; not part of the public API.
  */
-function extractJson(raw: string): unknown {
+export function extractJson(raw: string): unknown {
   let text = raw.trim();
 
-  const fenceMatch = /```(?:json)?\s*([\s\S]*?)```/i.exec(text);
-  if (fenceMatch) text = fenceMatch[1].trim();
+  const outerFence = /^```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n?```$/i.exec(text);
+  if (outerFence) text = outerFence[1].trim();
 
   const firstBrace = text.indexOf("{");
   const lastBrace = text.lastIndexOf("}");
 
   if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-    throw new LlmError("INVALID_OUTPUT", "The model did not return a JSON object.");
+    throw new LlmError("INVALID_OUTPUT", "The model did not return a JSON object.", {
+      // Keep a slice: without it "no JSON object" is undebuggable, because the
+      // interesting part is what the model said instead.
+      cause: `${raw.length} chars, starts: ${raw.slice(0, 300)}`,
+    });
   }
 
   const candidate = text.slice(firstBrace, lastBrace + 1);
