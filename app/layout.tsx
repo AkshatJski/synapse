@@ -43,6 +43,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <a
+          href="#main"
+          className="sr-only rounded-md bg-background px-3 py-2 text-sm font-medium focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50 focus:ring-2 focus:ring-ring"
+        >
+          Skip to content
+        </a>
         <Suspense fallback={<SiteHeaderFallback />}>
           <SiteHeader />
         </Suspense>

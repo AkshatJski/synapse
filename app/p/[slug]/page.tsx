@@ -88,7 +88,7 @@ export async function generateMetadata({ params }: SharePageProps): Promise<Meta
 
 export default function SharePage({ params }: SharePageProps) {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
+    <main id="main" className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
       <div className="flex items-center justify-between gap-3 print:hidden">
         <Link href="/" className="flex items-center gap-2 text-sm font-medium">
           <Sparkles className="size-4 text-primary" />

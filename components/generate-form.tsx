@@ -449,7 +449,7 @@ export function GenerateForm({
         )}
 
         {generating && (
-          <div className="flex flex-col gap-5" role="status" aria-live="polite">
+          <div className="flex flex-col gap-5" role="status" aria-live="polite" aria-busy="true">
             <div className="flex flex-col gap-1">
               <p className="text-sm font-medium">Building your roadmap</p>
               <p className="text-sm text-muted-foreground">

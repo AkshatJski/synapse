@@ -33,7 +33,7 @@ export const metadata = { title: "Roadmap" };
 
 export default function ProjectPage({ params }: ProjectPageProps) {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
+    <main id="main" className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
       <Button
         variant="ghost"
         size="sm"

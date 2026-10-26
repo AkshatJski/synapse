@@ -24,7 +24,7 @@ export default function AppError({
   }, [error]);
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-6 py-16">
+    <main id="main" className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-6 py-16">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">

@@ -42,7 +42,7 @@ const sampleSteps = [
 
 export default function HomePage() {
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-16 px-6 py-20">
+    <main id="main" className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-16 px-6 py-20">
       <section className="grid items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="flex flex-col items-start gap-6">
           <Badge variant="secondary" className="gap-1.5">

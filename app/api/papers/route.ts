@@ -5,6 +5,7 @@ import { ArxivError, isTransientArxivError, searchArxivPapers } from "@/lib/arxi
 import { isSupabaseConfigured } from "@/lib/env";
 import { rankCandidates, toCandidate } from "@/lib/papers";
 import { DOMAINS, LANGUAGES } from "@/lib/roadmap";
+import { papersLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
 export const maxDuration = 60;
@@ -57,6 +58,16 @@ export async function POST(request: Request) {
 
   if (!user) {
     return fail(401, "Please sign in to search for papers.", "UNAUTHENTICATED");
+  }
+
+  // Best-effort speed bump, per warm instance (D44). The real cost guard is the
+  // daily per-user generation quota; this one just stops tight loops.
+  const limit = papersLimiter.check(user.id);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Too many searches in a row. Wait a few seconds and try again.", code: "RATE_LIMITED" },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
+    );
   }
 
   const { domain, language, exclude = [] } = parsed.data;

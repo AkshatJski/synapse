@@ -12,6 +12,7 @@ import { isSupabaseConfigured } from "@/lib/env";
 import type { GenerateEvent } from "@/lib/generate-events";
 import { generateRoadmap, LlmError } from "@/lib/llm";
 import { DOMAINS, LANGUAGES, SKILL_LEVELS } from "@/lib/roadmap";
+import { generateLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import type { PaperRow } from "@/lib/types";
 
@@ -31,8 +32,8 @@ const BodySchema = z.object({
 });
 
 /** JSON error with a message that is safe to show a user verbatim. */
-function fail(status: number, message: string, code: string) {
-  return NextResponse.json({ error: message, code }, { status });
+function fail(status: number, message: string, code: string, headers?: Record<string, string>) {
+  return NextResponse.json({ error: message, code }, { status, headers });
 }
 
 type Send = (event: GenerateEvent) => void;
@@ -149,6 +150,17 @@ export async function POST(request: Request) {
     return fail(401, "Please sign in to generate a project.", "UNAUTHENTICATED");
   }
 
+  // Best-effort per-instance speed bump in front of the expensive path (D44).
+  const limit = generateLimiter.check(user.id);
+  if (!limit.ok) {
+    return fail(
+      429,
+      "You are generating too quickly. Wait a few seconds and try again.",
+      "RATE_LIMITED",
+      { "Retry-After": String(limit.retryAfterSeconds) },
+    );
+  }
+
   // Cheap abuse guard for a free-tier deployment: cap generations per user per day.
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { count: recentCount } = await supabase
@@ -167,6 +179,7 @@ export async function POST(request: Request) {
 
   // ------------------------------------------------ 2. streamed pipeline
   return streamPipeline(async (send) => {
+    const pipelineStartedAt = Date.now();
     const streamFail = (status: number, message: string, code: string) =>
       send({ type: "error", status, message, code });
 
@@ -316,6 +329,10 @@ export async function POST(request: Request) {
     // ---------------------------------------------------------------- 2c. LLM
     send({ type: "stage", stage: "planning" });
 
+    // Where the time went, for the log loop (D37): paper fetch + cache, LLM, save.
+    const paperMs = Date.now() - arxivStartedAt;
+    const llmStartedAt = Date.now();
+
     let roadmap;
     try {
       roadmap = await generateRoadmap({ paper, domain, language, skillLevel });
@@ -353,6 +370,9 @@ export async function POST(request: Request) {
 
     // ------------------------------------------------------------ 2d. persist
     send({ type: "stage", stage: "saving" });
+
+    const llmMs = Date.now() - llmStartedAt;
+    const saveStartedAt = Date.now();
 
     const { data: project, error: projectError } = await supabase
       .from("projects")
@@ -394,6 +414,15 @@ export async function POST(request: Request) {
       streamFail(500, "Could not save the roadmap steps. Please try again.", "DB_ERROR");
       return;
     }
+
+    console.info("[generate] timings", {
+      paperId: paper.arxivId,
+      chosen: Boolean(paperId),
+      paperMs,
+      llmMs,
+      saveMs: Date.now() - saveStartedAt,
+      totalMs: Date.now() - pipelineStartedAt,
+    });
 
     send({ type: "done", projectId: project.id });
   });

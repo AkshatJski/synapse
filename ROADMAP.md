@@ -23,7 +23,7 @@ local. Anything marked ✅ is verified in production, not "works on my machine".
 | Export | Markdown download (progress for the owner, none for visitors) + print styles (D42) |
 | Management | rename + delete, two-step confirm, papers survive delete (D40) |
 | Safety | PPR-safe rendering everywhere (`connection()`), daily quota 10/user, RLS as the boundary |
-| CI | lint + **env-less** build + 7 offline specs, ~57 s, green on every push (D38) |
+| CI | lint + **env-less** build + 8 offline specs, ~57 s, green on every push (D38) |
 | Bugs | 15 logged, 14 fixed, 0 open (`report.md`) |
 
 ### What the last three phases taught us
@@ -97,19 +97,22 @@ roadmap and open it in an editor without cleanup.
 
 ---
 
-## Next — v0.6 "Hardened"
+## Shipped — v0.6 "Hardened" · 2026-10-26
 
-| Item | Why |
+| Item | State |
 |---|---|
-| **Server-action tests** with a fake Supabase client (rename, delete, share) | those paths need a session, so CI cannot reach them today |
-| **Security headers / CSP** in `next.config.ts` | cheap, expected, no runtime cost |
-| **Per-IP rate limit** in addition to per-user/day | ten accounts is currently ten times the quota |
-| **Timing instrumentation** (`[generate] timings { arxivMs, llmMs, saveMs }`) | the log loop (D37) currently cannot answer "where did the 9 s go?" |
-| **Accessibility pass** — keyboard focus, reduced motion, mobile header/dashboard | a portfolio project gets judged on this in ten seconds |
+| **Server-action rules extracted + tested** with a fake client (rename, delete, share) | ✅ `lib/project-ops.ts`, `verify:actions` — idempotent slug, RLS-filtered row, signed-out, migration hint |
+| **Security headers / CSP** in `next.config.ts` | ✅ six headers; CSP limited to clickjacking/base/form/plugin (no fake `script-src`) |
+| **Per-user rate limit** on both expensive routes | ✅ 30/min search, 6/min generate, `429` + `Retry-After`; honestly per-instance |
+| **Timing instrumentation** | ✅ `[generate] timings { paperId, chosen, paperMs, llmMs, saveMs, totalMs }` |
+| **Accessibility pass** | ✅ skip link, `id="main"`, `aria-busy`, `prefers-reduced-motion` |
+
+Exit test: CI runs eight offline specs; headers visible on a real `next start`
+response; the quota and limit paths return the documented status codes.
 
 ---
 
-## v1.0 "Public" (only if the app earns it)
+## Next — v1.0 "Public" (only if the app earns it)
 
 - **Public gallery** of link-shared roadmaps, opt-in only, filterable by domain.
   Requires a moderation answer first; sharing is currently unlisted by design.
@@ -141,11 +144,11 @@ roadmap and open it in an editor without cleanup.
 | B2 | Export to Markdown / print | med | S | **done (v0.5)** |
 | B3 | Error + not-found boundaries | med | S | **done (v0.5)** |
 | B4 | Landing page proof section | med | M | **done (v0.5)** |
-| C1 | Stage timing logs | med | S | v0.6 |
-| C2 | Server-action tests | med | M | v0.6 |
-| C3 | Security headers / CSP | low | S | v0.6 |
-| C4 | Per-IP rate limit | low | M | v0.6 |
-| C5 | Accessibility + responsive pass | med | M | v0.6 |
+| C1 | Stage timing logs | med | S | **done (v0.6)** |
+| C2 | Server-action tests | med | M | **done (v0.6)** |
+| C3 | Security headers / CSP | low | S | **done (v0.6)** |
+| C4 | Per-user rate limit (best-effort) | low | M | **done (v0.6)** |
+| C5 | Accessibility + responsive pass | med | M | **done (v0.6)** |
 | D1 | Public gallery | low | L | v1.0 |
 | D2 | Analytics + custom events | low | S | v1.0 |
 | D3 | Screenshots / demo script | med | S | v1.0 |

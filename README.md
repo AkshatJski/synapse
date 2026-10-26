@@ -66,6 +66,7 @@ card instead of crashing.
 | `npm run build` | Production build + type check |
 | `npm run lint` | ESLint |
 | `npm run verify:arxiv` | Smoke-test `lib/arxiv.ts` against the live arXiv API |
+| `npm run verify:offline` | All offline specs (no keys, no network, no database) |
 
 ## Project layout
 
@@ -87,6 +88,8 @@ lib/
   arxiv.ts              typed arXiv Atom client (search + fetch by id)
   papers.ts             candidate ranking, dedupe and previews
   export.ts             roadmap -> Markdown (pure, testable)
+  project-ops.ts        rename/delete/share rules over an injected client
+  rate-limit.ts         best-effort fixed-window counter for the API routes
   llm.ts                Groq/Gemini transport, JSON repair retry, provider failover
   roadmap.ts            zod schema for the LLM contract
   env.ts                the only place that reads process.env
@@ -121,8 +124,9 @@ Phases, acceptance criteria and the full backlog: **[ROADMAP.md](ROADMAP.md)**.
 - [x] Live generation progress (streamed stages, real paper title)
 - [x] Markdown export + print styles
 - [x] Error and not-found boundaries
-- [x] Rename / delete roadmaps
-- [x] CI: lint, env-less build and seven offline regression specs on every push
+- [x] Rename / delete roadmaps, with the rules tested against a fake client
+- [x] Security headers (narrow CSP) and per-user rate limits on both expensive routes
+- [x] CI: lint, env-less build and eight offline regression specs on every push
 - [ ] Streaming roadmaps (progressive JSON steps as the model writes them)
 
 ## License
