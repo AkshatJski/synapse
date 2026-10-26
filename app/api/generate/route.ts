@@ -91,6 +91,7 @@ export async function POST(request: Request) {
 
   // -------------------------------------------------------------- 2. arXiv
   let papers: ArxivPaper[] = [];
+  const arxivStartedAt = Date.now();
   try {
     papers = await searchArxivPapers(`${domain} ${language}`, 8);
     if (papers.length === 0) {
@@ -99,16 +100,38 @@ export async function POST(request: Request) {
       papers = await searchArxivPapers(domain, 8, { sortBy: "submittedDate" });
     }
   } catch (error) {
+    const elapsedMs = Date.now() - arxivStartedAt;
+
     if (error instanceof ArxivError) {
-      const status = isTransientArxivError(error) ? 503 : 400;
+      // This log line is the whole point: without it an outage produces a vague
+      // message for the user and nothing at all for whoever debugs it.
+      console.error("[generate] arxiv failed", {
+        code: error.code,
+        status: error.status,
+        elapsedMs,
+        query: `${domain} ${language}`,
+      });
+
+      if (error.code === "RATE_LIMITED") {
+        return fail(
+          503,
+          error.status === 429
+            ? "arXiv is rate-limiting requests right now. Wait about a minute, then try again."
+            : "arXiv is temporarily unavailable. Wait a minute, then try again.",
+          error.code,
+        );
+      }
+
       return fail(
-        status,
+        isTransientArxivError(error) ? 503 : 400,
         isTransientArxivError(error)
           ? "The paper library (arXiv) is not responding right now. Please try again in a moment."
           : "That search could not be run against arXiv. Try a broader domain.",
         error.code,
       );
     }
+
+    console.error("[generate] arxiv threw a non-ArxivError", { elapsedMs, error });
     return fail(502, "Could not reach arXiv.", "ARXIV_FAILED");
   }
 

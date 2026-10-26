@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "verify:arxiv": "node scripts/verify-arxiv.mts"
+    "verify:arxiv": "node scripts/verify-arxiv.mts",
+    "verify:arxiv:retry": "node scripts/verify-arxiv-retry.mts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

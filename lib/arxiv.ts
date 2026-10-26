@@ -18,9 +18,13 @@ import { XMLParser } from "fast-xml-parser";
 
 export const ARXIV_API_URL = "https://export.arxiv.org/api/query";
 
-const REQUEST_TIMEOUT_MS = 15_000;
-const MAX_ATTEMPTS = 3;
-const RETRY_BASE_DELAY_MS = 750;
+// arXiv's API is normally fast (1-3s) but has been observed taking 16-65s under
+// load. A 15s budget guaranteed failure exactly when users retried hardest.
+const REQUEST_TIMEOUT_MS = 35_000;
+// Two attempts, never three: a 429 is a decision from arXiv, not an accident.
+const MAX_ATTEMPTS = 2;
+// arXiv asks for ~3 seconds between requests; anything shorter earns more 429s.
+const RETRY_BASE_DELAY_MS = 3_000;
 const MAX_RESULTS_LIMIT = 50;
 const DEFAULT_MAX_RESULTS = 10;
 const USER_AGENT = "Synapse/0.1 (academic-paper-to-project-roadmap)";
@@ -352,10 +356,12 @@ function isAbortError(error: unknown): boolean {
  * Fetches the Atom feed with bounded retries.
  *
  * Retry policy:
- *  - 429 / 503  -> arXiv asking us to slow down  -> retry with exponential backoff
- *  - 5xx        -> transient server fault        -> retry
+ *  - 429        -> arXiv rate limiter. Do NOT retry: their guidance is to back
+ *                  off, and retrying inside the same request only deepens the
+ *                  throttle while burning another timeout window.
+ *  - 503 / 5xx  -> transient server fault        -> retry once, 3s apart
  *  - other 4xx  -> our request is wrong          -> fail fast, retrying cannot help
- *  - timeout    -> retry
+ *  - timeout    -> retry once
  */
 async function fetchAtomFeed(url: string, revalidateSeconds: number): Promise<string> {
   let lastError: ArxivError | undefined;
@@ -373,10 +379,16 @@ async function fetchAtomFeed(url: string, revalidateSeconds: number): Promise<st
         next: { revalidate: revalidateSeconds },
       });
 
-      if (response.status === 429 || response.status === 503) {
+      if (response.status === 429) {
+        throw new ArxivError("RATE_LIMITED", "arXiv is rate limiting requests right now.", {
+          status: response.status,
+        });
+      }
+
+      if (response.status === 503) {
         lastError = new ArxivError(
           "RATE_LIMITED",
-          "arXiv is rate limiting requests right now. Please try again shortly.",
+          "arXiv is temporarily unavailable.",
           { status: response.status },
         );
       } else if (!response.ok) {
@@ -392,12 +404,18 @@ async function fetchAtomFeed(url: string, revalidateSeconds: number): Promise<st
       }
     } catch (error) {
       if (error instanceof ArxivError) {
-        if (error.code === "HTTP_ERROR" && (error.status ?? 500) < 500) throw error;
+        // 429 and 4xx are decisions, not accidents: retrying cannot help.
+        if (
+          error.code === "RATE_LIMITED" ||
+          (error.code === "HTTP_ERROR" && (error.status ?? 500) < 500)
+        ) {
+          throw error;
+        }
         lastError = error;
       } else if (isAbortError(error)) {
         lastError = new ArxivError(
           "TIMEOUT",
-          "arXiv did not respond within 15 seconds. Please try again.",
+          `arXiv did not respond within ${REQUEST_TIMEOUT_MS / 1000} seconds. Please try again.`,
           { cause: error },
         );
       } else {
@@ -406,7 +424,7 @@ async function fetchAtomFeed(url: string, revalidateSeconds: number): Promise<st
     }
 
     if (attempt < MAX_ATTEMPTS) {
-      await sleep(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1)); // 750ms, then 1500ms
+      await sleep(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1)); // 3s (arXiv's guidance)
     }
   }
 
