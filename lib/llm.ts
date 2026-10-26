@@ -432,6 +432,13 @@ export async function generateRoadmap(request: RoadmapRequest): Promise<Roadmap>
         const parsed = RoadmapSchema.safeParse(extractJson(raw));
 
         if (parsed.success) {
+          // With failover in play, "which provider answered, and after how many
+          // attempts?" is the first question any incident asks. One line, no PII.
+          console.info("[llm] roadmap generated", {
+            provider,
+            attempt,
+            fallbacksUsed: index,
+          });
           return normaliseRoadmap(parsed.data);
         }
 
