@@ -12,6 +12,12 @@ import type { StepRow } from "@/lib/types";
 interface StepsListProps {
   steps: StepRow[];
   language: string;
+  /**
+   * Renders the roadmap without any interaction. Used by the public share page:
+   * a visitor is not the owner, so there is nothing to toggle and no progress to
+   * claim (their view of `is_completed` would belong to someone else anyway).
+   */
+  readOnly?: boolean;
 }
 
 /**
@@ -21,7 +27,7 @@ interface StepsListProps {
  * in a transition, and a failure rolls the UI back and explains why. On a free
  * tier the round trip is the slow part, so waiting for it would feel broken.
  */
-export function StepsList({ steps, language }: StepsListProps) {
+export function StepsList({ steps, language, readOnly = false }: StepsListProps) {
   const [completed, setCompleted] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(steps.map((step) => [step.id, step.is_completed])),
   );
@@ -29,7 +35,6 @@ export function StepsList({ steps, language }: StepsListProps) {
 
   const done = steps.filter((step) => completed[step.id]).length;
   const percent = steps.length === 0 ? 0 : Math.round((done / steps.length) * 100);
-
   function handleToggle(step: StepRow) {
     const next = !completed[step.id];
     setCompleted((previous) => ({ ...previous, [step.id]: next }));
@@ -45,30 +50,32 @@ export function StepsList({ steps, language }: StepsListProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-medium">
-            {done} of {steps.length} steps complete
-          </span>
-          <span className="text-muted-foreground">{percent}%</span>
-        </div>
-        <div
-          className="h-2 w-full overflow-hidden rounded-full bg-muted"
-          role="progressbar"
-          aria-valuenow={percent}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
+      {!readOnly && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-medium">
+              {done} of {steps.length} steps complete
+            </span>
+            <span className="text-muted-foreground">{percent}%</span>
+          </div>
           <div
-            className="h-full rounded-full bg-primary transition-all duration-300"
-            style={{ width: `${percent}%` }}
-          />
+            className="h-2 w-full overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-valuenow={percent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div
+              className="h-full rounded-full bg-primary transition-all duration-300"
+              style={{ width: `${percent}%` }}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       <ol className="flex flex-col gap-4">
         {steps.map((step, index) => {
-          const isDone = completed[step.id];
+          const isDone = !readOnly && completed[step.id];
 
           return (
             <li
@@ -109,16 +116,20 @@ export function StepsList({ steps, language }: StepsListProps) {
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleToggle(step)}
-                  aria-pressed={isDone}
-                  aria-label={isDone ? `Mark "${step.title}" incomplete` : `Mark "${step.title}" complete`}
-                  className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[done=true]:border-primary data-[done=true]:bg-primary data-[done=true]:text-primary-foreground"
-                  data-done={isDone}
-                >
-                  {isDone ? <Check className="size-4" /> : <span className="size-4" aria-hidden />}
-                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => handleToggle(step)}
+                    aria-pressed={isDone}
+                    aria-label={
+                      isDone ? `Mark "${step.title}" incomplete` : `Mark "${step.title}" complete`
+                    }
+                    className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[done=true]:border-primary data-[done=true]:bg-primary data-[done=true]:text-primary-foreground"
+                    data-done={isDone}
+                  >
+                    {isDone ? <Check className="size-4" /> : <span className="size-4" aria-hidden />}
+                  </button>
+                )}
               </div>
             </li>
           );

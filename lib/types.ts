@@ -41,6 +41,9 @@ export interface ProjectRow {
   eli5_summary: string | null;
   prerequisite_concepts: string[];
   created_at: string;
+  /** Null = private. Set by the 0002_sharing migration. */
+  share_slug: string | null;
+  shared_at: string | null;
 }
 
 export interface StepRow {

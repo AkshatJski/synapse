@@ -1,10 +1,12 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, BookOpen, ExternalLink, FlaskConical } from "lucide-react";
+import { ArrowLeft, BookOpen, ExternalLink, FlaskConical, Globe } from "lucide-react";
 
 import { MarkdownContent } from "@/components/markdown";
 import { SetupNotice } from "@/components/setup-notice";
+import { SharePanel } from "@/components/share-panel";
 import { StepsList } from "@/components/steps-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isSupabaseConfigured } from "@/lib/env";
+import { isMissingSharingColumn } from "@/lib/sharing";
 import { createClient } from "@/lib/supabase/server";
 import type { PaperRow, ProjectRow, StepRow } from "@/lib/types";
 
@@ -53,13 +56,27 @@ async function ProjectContent({ params }: ProjectPageProps) {
 
   if (!user) redirect(`/login?next=/project/${id}`);
 
-  const { data: projectData, error: projectError } = await supabase
+  const baseColumns =
+    "id, user_id, paper_id, domain, language, skill_level, title, overview, eli5_summary, prerequisite_concepts, created_at";
+
+  let { data: projectData, error: projectError } = await supabase
     .from("projects")
-    .select(
-      "id, user_id, paper_id, domain, language, skill_level, title, overview, eli5_summary, prerequisite_concepts, created_at, papers(*)",
-    )
+    .select(`${baseColumns}, share_slug, shared_at, papers(*)`)
     .eq("id", id)
     .maybeSingle();
+
+  // The share columns only exist after 0002_sharing.sql. Falling back keeps every
+  // existing roadmap usable instead of turning the page into a 404 because a
+  // migration has not been run yet.
+  let sharingReady = true;
+  if (projectError && isMissingSharingColumn(projectError)) {
+    sharingReady = false;
+    ({ data: projectData, error: projectError } = await supabase
+      .from("projects")
+      .select(`${baseColumns}, papers(*)`)
+      .eq("id", id)
+      .maybeSingle());
+  }
 
   if (projectError) {
     console.error("[project] query failed", projectError);
@@ -67,6 +84,13 @@ async function ProjectContent({ params }: ProjectPageProps) {
   if (!projectData) notFound();
 
   const project = projectData as unknown as ProjectRow & { papers: PaperRow | null };
+
+  // Resolve the absolute origin on the server: the share panel must not guess it
+  // from `window`, which would render differently on the server and the client.
+  const requestHeaders = await headers();
+  const origin = `${requestHeaders.get("x-forwarded-proto") ?? "http"}://${
+    requestHeaders.get("host") ?? "localhost:3000"
+  }`;
 
   const { data: stepsData } = await supabase
     .from("steps")
@@ -89,6 +113,12 @@ async function ProjectContent({ params }: ProjectPageProps) {
           <span className="text-xs text-muted-foreground">
             {dateFormatter.format(new Date(project.created_at))}
           </span>
+          {project.share_slug && (
+            <Badge variant="outline" className="gap-1 text-[0.7rem]">
+              <Globe className="size-3" />
+              Public
+            </Badge>
+          )}
         </div>
 
         <h1 className="text-3xl font-semibold tracking-tight text-balance">{project.title}</h1>
@@ -107,6 +137,13 @@ async function ProjectContent({ params }: ProjectPageProps) {
           </p>
         )}
       </header>
+
+      <SharePanel
+        projectId={project.id}
+        initialSlug={project.share_slug ?? null}
+        origin={origin}
+        sharingReady={sharingReady}
+      />
 
       <Card>
         <CardHeader className="gap-1">

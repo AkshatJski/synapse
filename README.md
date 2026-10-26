@@ -22,6 +22,9 @@ dense abstract into a step-by-step project roadmap you can actually ship.
 3. **Generate** — an LLM translates the abstract into an ELI5 summary,
    prerequisite concepts, and ordered build steps with code.
 4. **Build** — work through the roadmap, ticking steps off as you go.
+5. **Share** — publish a read-only link (`/p/<slug>`) that anyone can open
+   without an account. Opt-in, revocable, and it never exposes your profile or
+   your other roadmaps.
 
 ## Stack
 
@@ -68,8 +71,9 @@ app/
   auth/callback/route.ts  code -> session exchange
   dashboard/page.tsx    generator form + saved roadmaps
   project/[id]/page.tsx project workspace (roadmap / paper / prerequisites)
+  p/[slug]/page.tsx     public read-only share view
   api/generate/route.ts arXiv -> LLM -> Postgres, server-only
-  actions/              server actions (sign out, toggle a step)
+  actions/              server actions (sign out, toggle a step, sharing)
 lib/
   arxiv.ts              typed arXiv Atom client
   llm.ts                Groq/Gemini transport + JSON repair retry
@@ -99,7 +103,7 @@ Version-matched docs ship inside the package: `node_modules/next/dist/docs/`.
 - [x] Supabase schema, RLS, GitHub OAuth + email magic link
 - [x] `/api/generate` — LLM roadmap with strict JSON validation + repair retry
 - [x] Project workspace with step tracking
-- [ ] Public project sharing
+- [x] Public share links (read-only, opt-in, revocable)
 - [ ] Streaming roadmaps (progressive JSON)
 
 ## License
