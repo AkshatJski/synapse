@@ -13,7 +13,7 @@
  */
 
 import type { ArxivPaper } from "@/lib/arxiv";
-import { resolveLlmProvider, type LlmProvider } from "@/lib/env";
+import { resolveLlmProviders, type LlmProvider } from "@/lib/env";
 import { normaliseRoadmap, RoadmapSchema, type Roadmap, type SkillLevel } from "@/lib/roadmap";
 
 const REQUEST_TIMEOUT_MS = 45_000;
@@ -28,7 +28,9 @@ const ABSTRACT_CHAR_LIMIT = 4_000;
 // accepts both JSON mode and `reasoning_effort`. Keep this overridable: model
 // retirement is a config change, not a code change.
 const GROQ_MODEL = process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
-const GEMINI_MODEL = "gemini-2.5-flash";
+// Overridable for the same reason as GROQ_MODEL: model ids are retired on the
+// provider's schedule, not ours.
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 
 export type LlmErrorCode =
   | "NO_PROVIDER"
@@ -333,55 +335,93 @@ function describeIssues(error: { issues: { path: PropertyKey[]; message: string 
 /* -------------------------------------------------------------------------- */
 
 /**
- * Generates a validated roadmap. Retries exactly once, and only for *semantic*
- * failures (bad JSON / wrong shape) — a rate limit or network failure is not
- * something a re-prompt can fix.
+ * Failures a *different* provider might not share. A semantic failure (bad JSON,
+ * wrong shape) is the model's own doing, so the repair retry stays put; a rate
+ * limit or an upstream 5xx is about the provider, so moving on is the fix.
+ */
+function isProviderFailure(error: LlmError): boolean {
+  return (
+    error.code === "RATE_LIMITED" ||
+    error.code === "PROVIDER_ERROR" ||
+    error.code === "NO_PROVIDER"
+  );
+}
+
+/**
+ * Generates a validated roadmap.
+ *
+ * Two independent retry budgets:
+ *  - per provider, at most 2 attempts (the original and one *semantic* repair);
+ *  - across providers, one pass down the configured list.
+ *
+ * A provider that rate-limits or errors is abandoned for the next one instead of
+ * burning the repair attempt on a request that cannot succeed. Worst case is
+ * four calls, which only happens when both providers are firmly broken.
  *
  * @throws {LlmError} NO_PROVIDER | PROVIDER_ERROR | RATE_LIMITED | INVALID_OUTPUT
  */
 export async function generateRoadmap(request: RoadmapRequest): Promise<Roadmap> {
-  const resolved = resolveLlmProvider();
-  if (!resolved) {
+  const providers = resolveLlmProviders();
+
+  if (providers.length === 0) {
     throw new LlmError(
       "NO_PROVIDER",
       "No AI provider is configured. Set GROQ_API_KEY or GEMINI_API_KEY.",
     );
   }
 
-  const { provider, apiKey } = resolved;
-
-  let repairNote: string | undefined;
+  const MAX_SEMANTIC_ATTEMPTS = 2;
   let lastError: LlmError | undefined;
 
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const messages = buildMessages(request, repairNote);
-    let raw: string;
+  for (let index = 0; index < providers.length; index += 1) {
+    const { provider, apiKey } = providers[index];
+    let repairNote: string | undefined;
 
-    try {
-      raw = await callProvider(provider, apiKey, messages);
-    } catch (error) {
-      // Transport-level failures are final: a second identical request will not
-      // help, and it would double our free-tier usage for nothing.
-      if (error instanceof LlmError) throw error;
-      throw new LlmError("PROVIDER_ERROR", "Could not reach the AI provider.", { cause: error });
-    }
+    for (let attempt = 1; attempt <= MAX_SEMANTIC_ATTEMPTS; attempt += 1) {
+      const messages = buildMessages(request, repairNote);
 
-    try {
-      const parsed = RoadmapSchema.safeParse(extractJson(raw));
+      let raw: string;
+      try {
+        raw = await callProvider(provider, apiKey, messages);
+      } catch (error) {
+        const failure =
+          error instanceof LlmError
+            ? error
+            : new LlmError("PROVIDER_ERROR", "Could not reach the AI provider.", { cause: error });
 
-      if (parsed.success) {
-        return normaliseRoadmap(parsed.data);
+        lastError = failure;
+
+        if (isProviderFailure(failure) && index + 1 < providers.length) {
+          const next = providers[index + 1];
+          console.warn("[llm] provider failed, failing over", {
+            provider,
+            code: failure.code,
+            status: failure.status,
+            next: next.provider,
+          });
+          break;
+        }
+
+        throw failure;
       }
 
-      lastError = new LlmError(
-        "INVALID_OUTPUT",
-        `The model returned JSON that did not match the schema: ${describeIssues(parsed.error)}`,
-      );
-      repairNote = describeIssues(parsed.error);
-    } catch (error) {
-      if (!(error instanceof LlmError)) throw error;
-      lastError = error;
-      repairNote = error.message;
+      try {
+        const parsed = RoadmapSchema.safeParse(extractJson(raw));
+
+        if (parsed.success) {
+          return normaliseRoadmap(parsed.data);
+        }
+
+        repairNote = describeIssues(parsed.error);
+        lastError = new LlmError(
+          "INVALID_OUTPUT",
+          `The model returned JSON that did not match the schema: ${repairNote}`,
+        );
+      } catch (error) {
+        if (!(error instanceof LlmError)) throw error;
+        lastError = error;
+        repairNote = error.message;
+      }
     }
   }
 

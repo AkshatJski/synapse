@@ -36,21 +36,35 @@ export type LlmProvider = "groq" | "gemini";
 export const GROQ_API_KEY = process.env.GROQ_API_KEY ?? "";
 export const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? "";
 
+export interface LlmCandidate {
+  provider: LlmProvider;
+  apiKey: string;
+}
+
 /**
- * Picks the first provider that actually has a key.
- * `LLM_PROVIDER` expresses a preference; availability wins.
+ * Every provider that actually has a key, **preferred first**.
+ *
+ * Returning the whole list (instead of one winner) is what makes failover
+ * possible: `generateRoadmap` walks it until a provider answers. `LLM_PROVIDER`
+ * expresses a preference, availability still decides what is usable.
  */
-export function resolveLlmProvider(): { provider: LlmProvider; apiKey: string } | null {
+export function resolveLlmProviders(): LlmCandidate[] {
   const preferred = (process.env.LLM_PROVIDER ?? "groq").toLowerCase();
 
-  const candidates: { provider: LlmProvider; apiKey: string }[] = [
+  const all: LlmCandidate[] = [
     { provider: "groq", apiKey: GROQ_API_KEY },
     { provider: "gemini", apiKey: GEMINI_API_KEY },
   ];
 
-  const available = candidates.filter((candidate) => candidate.apiKey.length > 0);
-  if (available.length === 0) return null;
+  const available = all.filter((candidate) => candidate.apiKey.length > 0);
 
-  const match = available.find((candidate) => candidate.provider === preferred);
-  return match ?? available[0];
+  return [
+    ...available.filter((candidate) => candidate.provider === preferred),
+    ...available.filter((candidate) => candidate.provider !== preferred),
+  ];
+}
+
+/** Convenience for callers that only care about the primary. */
+export function resolveLlmProvider(): LlmCandidate | null {
+  return resolveLlmProviders()[0] ?? null;
 }
