@@ -9,6 +9,8 @@ dense abstract into a step-by-step project roadmap you can actually ship.
 > Built entirely on free tiers: **arXiv** (papers) · **Supabase** (Postgres, auth,
 > RLS) · **Groq / Gemini** (LLM) · **Vercel** (hosting). No paid APIs.
 
+**Live:** <https://synapse-seven-ebon.vercel.app>
+
 ---
 
 ## What it does
