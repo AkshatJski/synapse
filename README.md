@@ -101,6 +101,8 @@ Version-matched docs ship inside the package: `node_modules/next/dist/docs/`.
 
 ## Roadmap
 
+Phases, acceptance criteria and the full backlog: **[ROADMAP.md](ROADMAP.md)**.
+
 - [x] Next.js + Tailwind + shadcn scaffold
 - [x] Typed arXiv client with retry/backoff
 - [x] Supabase schema, RLS, GitHub OAuth + email magic link
