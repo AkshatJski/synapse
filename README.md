@@ -18,10 +18,13 @@ dense abstract into a step-by-step project roadmap you can actually ship.
 1. **Choose** a domain (Computer Vision, NLP, RL…), a language (Python,
    TypeScript, Rust…) and a skill level (Beginner / Intermediate / Advanced).
 2. **Search** — Synapse queries the arXiv Atom API for a relevant recent paper
-   and caches its metadata.
+   and caches its metadata. Progress is streamed back as it happens: you see the
+   search, the paper it picked, the planning step, then the save.
 3. **Generate** — an LLM translates the abstract into an ELI5 summary,
    prerequisite concepts, and ordered build steps with code.
-4. **Build** — work through the roadmap, ticking steps off as you go.
+4. **Build** — work through the roadmap, ticking steps off as you go. Rename or
+   delete any roadmap from the dashboard; deleting one also kills its public
+   link.
 5. **Share** — publish a read-only link (`/p/<slug>`) that anyone can open
    without an account. Opt-in, revocable, and it never exposes your profile or
    your other roadmaps.
@@ -104,7 +107,10 @@ Version-matched docs ship inside the package: `node_modules/next/dist/docs/`.
 - [x] `/api/generate` — LLM roadmap with strict JSON validation + repair retry
 - [x] Project workspace with step tracking
 - [x] Public share links (read-only, opt-in, revocable)
-- [ ] Streaming roadmaps (progressive JSON)
+- [x] Live generation progress (streamed stages, real paper title)
+- [x] Rename / delete roadmaps
+- [x] CI: lint, env-less build and five offline regression specs on every push
+- [ ] Streaming roadmaps (progressive JSON steps as the model writes them)
 
 ## License
 
