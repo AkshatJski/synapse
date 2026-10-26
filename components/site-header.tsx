@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { LayoutDashboard, Sparkles, User } from "lucide-react";
 
 import { signOut } from "@/app/actions/auth";
@@ -14,6 +15,13 @@ import { createClient } from "@/lib/supabase/server";
  * static shell while the per-user part streams in.
  */
 export async function SiteHeader() {
+  // Supabase's auth client calls Date.now() while loading the session from the
+  // cookie. Next treats that as an unstable value, so prerendering must stop
+  // *before* the client is constructed — otherwise every request logs
+  // "encountered the unstable value Date.now() while prerendering" for
+  // signed-in users (BUG-014).
+  await connection();
+
   let displayName: string | null = null;
 
   if (isSupabaseConfigured()) {

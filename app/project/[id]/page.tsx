@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
+import { connection } from "next/server";
 import { ArrowLeft, BookOpen, ExternalLink, FlaskConical, Globe } from "lucide-react";
 
 import { MarkdownContent } from "@/components/markdown";
@@ -45,6 +46,10 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
 /** Awaits `params` and reads the session, so it sits behind Suspense. */
 async function ProjectContent({ params }: ProjectPageProps) {
+  // Same reason as SiteHeader: Supabase's auth client calls Date.now() while
+  // loading the session cookie, which cannot happen during prerender (BUG-014).
+  await connection();
+
   if (!isSupabaseConfigured()) return <SetupNotice />;
 
   const { id } = await params;

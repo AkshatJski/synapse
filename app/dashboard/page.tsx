@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { ArrowRight, BookOpen, FolderOpen } from "lucide-react";
 
 import { GenerateForm } from "@/components/generate-form";
@@ -50,6 +51,10 @@ export default function DashboardPage() {
  * Cache Components contract: static shell, streamed dynamic section.
  */
 async function ProjectsSection() {
+  // Same reason as SiteHeader: stop prerendering before Supabase's auth client
+  // calls Date.now() while reading the session cookie (BUG-014).
+  await connection();
+
   if (!isSupabaseConfigured()) {
     return (
       <p className="text-sm text-muted-foreground">
