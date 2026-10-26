@@ -29,8 +29,11 @@ const ABSTRACT_CHAR_LIMIT = 4_000;
 // retirement is a config change, not a code change.
 const GROQ_MODEL = process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
 // Overridable for the same reason as GROQ_MODEL: model ids are retired on the
-// provider's schedule, not ours.
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+// provider's schedule, not ours. Note the trap (BUG-013): `GET /v1beta/models`
+// still lists `gemini-2.5-flash`, but calling it returns
+// 404 "no longer available to new users". A model appearing in the list does not
+// mean the key can use it — only a real call proves that.
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite";
 
 export type LlmErrorCode =
   | "NO_PROVIDER"
@@ -259,12 +262,32 @@ async function callGemini(apiKey: string, messages: ChatMessage[]): Promise<stri
   }
 
   const data = (await response.json()) as {
-    candidates?: { content?: { parts?: { text?: string }[] } }[];
+    candidates?: {
+      content?: { parts?: { text?: string; thought?: boolean }[] };
+      finishReason?: string;
+    }[];
+    promptFeedback?: { blockReason?: string };
   };
-  const text = data.candidates?.[0]?.content?.parts
-    ?.map((part) => part.text ?? "")
+
+  const candidate = data.candidates?.[0];
+  // Thinking models can return their reasoning as separate parts. Joining those
+  // into the answer would put prose in front of the JSON, so drop them.
+  const text = candidate?.content?.parts
+    ?.filter((part) => !part.thought)
+    .map((part) => part.text ?? "")
     .join("")
     .trim();
+
+  if (candidate?.finishReason === "MAX_TOKENS" && text) {
+    throw new LlmError("PROVIDER_ERROR", "Gemini truncated the response at maxOutputTokens.", {
+      cause: text.slice(-200),
+    });
+  }
+  if (candidate?.finishReason === "SAFETY" || data.promptFeedback?.blockReason) {
+    throw new LlmError("PROVIDER_ERROR", "Gemini blocked the response.", {
+      cause: data.promptFeedback?.blockReason ?? "finishReason: SAFETY",
+    });
+  }
 
   if (!text) {
     throw new LlmError("PROVIDER_ERROR", "Gemini returned an empty completion.");

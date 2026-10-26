@@ -32,22 +32,29 @@ Time: about 10 minutes.
    - Redirect URLs: `http://localhost:3000/auth/callback`
    - Add your production URLs later (e.g. `https://synapse.vercel.app/auth/callback`).
 
-## 2. AI provider (pick one)
+## 2. AI provider (pick one, or both for failover)
 
-### Groq (recommended — fast, generous free tier)
+### Google Gemini (recommended — ~250 requests/day free)
+
+1. <https://aistudio.google.com/apikey> → Create API key. No credit card needed.
+2. Put it in `.env.local` as `GEMINI_API_KEY`.
+3. Model used: `gemini-2.5-flash` with `responseMimeType: application/json`
+   (override with `GEMINI_MODEL` if that id is ever retired).
+
+### Groq (fallback — fast, but only 8000 tokens/minute)
 
 1. <https://console.groq.com/keys> → Create API key.
 2. Put it in `.env.local` as `GROQ_API_KEY`.
-3. Model used: `llama-3.3-70b-versatile` with JSON mode.
+3. Model used: `openai/gpt-oss-120b` with JSON mode (override with `GROQ_MODEL`).
 
-### Google Gemini (alternative / fallback)
+Why Gemini first: one roadmap is ~6.5k tokens, which is ~80% of Groq's entire
+per-minute budget, so a retry or a second user inside the same minute gets a 429.
+Gemini's free tier is metered in requests/day instead, and its token ceiling is
+far higher.
 
-1. <https://aistudio.google.com/apikey> → Create API key.
-2. Put it in `.env.local` as `GEMINI_API_KEY`.
-3. Model used: `gemini-2.5-flash` with `responseMimeType: application/json`.
-
-Set `LLM_PROVIDER=groq` or `LLM_PROVIDER=gemini` to express a preference. If the
-preferred provider has no key, the other one is used automatically.
+`LLM_PROVIDER=gemini` (or `groq`) picks which one is tried **first**. Configure
+both and the other is used automatically when the first one is rate-limited or
+erroring — no code change, no redeploy.
 
 ## 3. Environment file
 
@@ -58,8 +65,9 @@ cp .env.example .env.local
 ```dotenv
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...
-GROQ_API_KEY=gsk_...
-LLM_PROVIDER=groq
+GEMINI_API_KEY=AIza...
+GROQ_API_KEY=gsk_...          # optional fallback
+LLM_PROVIDER=gemini
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` is **not** required by the current code. Do not add
@@ -111,7 +119,9 @@ Add the same three values you put in `.env.local`:
 ```bash
 vercel env add NEXT_PUBLIC_SUPABASE_URL production
 vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY production
-vercel env add GROQ_API_KEY production
+vercel env add GEMINI_API_KEY production
+vercel env add GROQ_API_KEY production      # optional, enables failover
+vercel env add LLM_PROVIDER production      # "gemini"
 ```
 
 Repeat with `preview` (and `development` if you use `vercel env pull`). Then

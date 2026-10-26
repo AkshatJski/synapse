@@ -35,7 +35,7 @@ dense abstract into a step-by-step project roadmap you can actually ship.
 | UI | Tailwind CSS v4, shadcn/ui (`base-nova`), lucide-react, sonner |
 | Data | arXiv Atom API (`fast-xml-parser`) |
 | Database / auth | Supabase (Postgres + RLS, GitHub OAuth + email) |
-| AI | Groq (Llama 3.3 70B) or Google Gemini — free tier |
+| AI | Google Gemini free tier (primary) + Groq free tier (automatic fallback) |
 | Markdown | react-markdown + rehype-highlight |
 
 ## Getting started
@@ -76,7 +76,7 @@ app/
   actions/              server actions (sign out, toggle a step, sharing)
 lib/
   arxiv.ts              typed arXiv Atom client
-  llm.ts                Groq/Gemini transport + JSON repair retry
+  llm.ts                Groq/Gemini transport, JSON repair retry, provider failover
   roadmap.ts            zod schema for the LLM contract
   env.ts                the only place that reads process.env
   supabase/             browser, server and proxy clients
