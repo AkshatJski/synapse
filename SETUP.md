@@ -126,6 +126,20 @@ magic links will land on `localhost` and fail:
   - `http://localhost:3000/auth/callback`
   - `https://synapse-seven-ebon.vercel.app/auth/callback`
 
+### Commit authorship (required for auto-deploy)
+
+Vercel Hobby blocks deployments of commits it cannot attribute to the account
+owner. Use the GitHub noreply address, which is always resolvable:
+
+```bash
+git config user.name "Akshat Mishra"
+git config user.email "178628178+AkshatJski@users.noreply.github.com"
+```
+
+A commit authored with an unverified address (or a placeholder such as
+`dev@synapse.local`) produces a `● Blocked` deployment with a 0 ms build, while
+production keeps serving the previous build.
+
 ## 7. Troubleshooting
 
 
