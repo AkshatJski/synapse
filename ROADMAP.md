@@ -19,10 +19,11 @@ local. Anything marked ✅ is verified in production, not "works on my machine".
 | Paper choice | **you pick from three candidates** — free shuffle, id-only handoff, no quota spent until you build (D41) |
 | Progress | **streamed** stages from the server: searching → reading (real paper title) → planning → saving (D39) |
 | Workspace | roadmaps, ELI5 summary, prerequisites, roadmap/paper tabs, optimistic step tracking |
-| Sharing | opt-in `/p/<slug>`, read-only, revocable, anon RLS policy (D30–D33) |
+| Sharing | opt-in `/p/<slug>`, read-only, revocable, anon RLS policy, generated OG card (D30–D33, D42) |
+| Export | Markdown download (progress for the owner, none for visitors) + print styles (D42) |
 | Management | rename + delete, two-step confirm, papers survive delete (D40) |
 | Safety | PPR-safe rendering everywhere (`connection()`), daily quota 10/user, RLS as the boundary |
-| CI | lint + **env-less** build + 6 offline specs, ~57 s, green on every push (D38) |
+| CI | lint + **env-less** build + 7 offline specs, ~57 s, green on every push (D38) |
 | Bugs | 15 logged, 14 fixed, 0 open (`report.md`) |
 
 ### What the last three phases taught us
@@ -82,21 +83,21 @@ the product; it should not be a lottery.
 
 ---
 
-## Next — v0.5 "Worth sharing"
+## Shipped — v0.5 "Worth sharing" · 2026-10-26
 
-| Item | Why |
+| Item | State |
 |---|---|
-| **OG image for share links** (1200×630, `ImageResponse`) | a pasted link currently renders as plain text in Slack/X/Discord |
-| **Export roadmap** — copy/download Markdown, print stylesheet | turns a read-only page into something a learner keeps |
-| **Error boundaries** — `error.tsx`, `not-found.tsx`, offline copy | today an unexpected throw is a white screen |
-| **Landing page proof** — one real roadmap preview, "how it works", honest cost line | the current landing page asserts value without showing it |
+| **OG image for share links** (1200×630, `ImageResponse`) | ✅ generated per slug, never 500s, falls back to a generic card |
+| **Export roadmap** — download Markdown, print stylesheet | ✅ owner export has progress; shared export does not; fences widen for backticks |
+| **Error boundaries** — `error.tsx`, `not-found.tsx` | ✅ retry + reference digest; 404 does not reveal whether a link was revoked |
+| **Landing page proof** — labelled example roadmap, honest cost line | ✅ week-one checklist removed |
 
 Exit test: paste a share link into a chat app and it looks deliberate; download a
 roadmap and open it in an editor without cleanup.
 
 ---
 
-## v0.6 "Hardened" (engineering, mostly invisible)
+## Next — v0.6 "Hardened"
 
 | Item | Why |
 |---|---|
@@ -136,10 +137,10 @@ roadmap and open it in an editor without cleanup.
 |---|---|---|---|---|
 | A1 | Paper preview + choose/shuffle | high | M | **done (v0.4)** |
 | A2 | "Try another paper" from a project | high | S | **done (v0.4)** |
-| B1 | OG image for share links | med | S | v0.5 |
-| B2 | Export to Markdown / print | med | S | v0.5 |
-| B3 | Error + not-found boundaries | med | S | v0.5 |
-| B4 | Landing page proof section | med | M | v0.5 |
+| B1 | OG image for share links | med | S | **done (v0.5)** |
+| B2 | Export to Markdown / print | med | S | **done (v0.5)** |
+| B3 | Error + not-found boundaries | med | S | **done (v0.5)** |
+| B4 | Landing page proof section | med | M | **done (v0.5)** |
 | C1 | Stage timing logs | med | S | v0.6 |
 | C2 | Server-action tests | med | M | v0.6 |
 | C3 | Security headers / CSP | low | S | v0.6 |

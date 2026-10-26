@@ -80,7 +80,7 @@ export function StepsList({ steps, language, readOnly = false }: StepsListProps)
           return (
             <li
               key={step.id}
-              className="rounded-xl border bg-card p-4 transition-colors data-[done=true]:bg-muted/40"
+              className="rounded-xl border bg-card p-4 transition-colors data-[done=true]:bg-muted/40 print:break-inside-avoid"
               data-done={isDone}
             >
               <div className="flex items-start gap-3">

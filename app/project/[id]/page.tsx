@@ -7,6 +7,7 @@ import { ArrowLeft, BookOpen, ExternalLink, FlaskConical, Globe, RefreshCw } fro
 
 import { MarkdownContent } from "@/components/markdown";
 import { ProjectActions } from "@/components/project-actions";
+import { RoadmapActions } from "@/components/roadmap-actions";
 import { SetupNotice } from "@/components/setup-notice";
 import { SharePanel } from "@/components/share-panel";
 import { StepsList } from "@/components/steps-list";
@@ -33,7 +34,12 @@ export const metadata = { title: "Roadmap" };
 export default function ProjectPage({ params }: ProjectPageProps) {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
-      <Button variant="ghost" size="sm" className="self-start" render={<Link href="/dashboard" />}>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="self-start print:hidden"
+        render={<Link href="/dashboard" />}
+      >
         <ArrowLeft className="size-4" />
         All roadmaps
       </Button>
@@ -133,7 +139,8 @@ async function ProjectContent({ params }: ProjectPageProps) {
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <RoadmapActions project={project} steps={steps} paper={paper} />
             <Button variant="outline" size="sm" render={<Link href={anotherPaperHref} />}>
               <RefreshCw className="size-3.5" />
               Try another paper
@@ -159,12 +166,14 @@ async function ProjectContent({ params }: ProjectPageProps) {
         )}
       </header>
 
-      <SharePanel
-        projectId={project.id}
-        initialSlug={project.share_slug ?? null}
-        origin={origin}
-        sharingReady={sharingReady}
-      />
+      <div className="print:hidden">
+        <SharePanel
+          projectId={project.id}
+          initialSlug={project.share_slug ?? null}
+          origin={origin}
+          sharingReady={sharingReady}
+        />
+      </div>
 
       <Card>
         <CardHeader className="gap-1">
@@ -179,7 +188,7 @@ async function ProjectContent({ params }: ProjectPageProps) {
       </Card>
 
       <Tabs defaultValue="roadmap" className="flex flex-col gap-4">
-        <TabsList>
+        <TabsList className="print:hidden">
           <TabsTrigger value="roadmap">Roadmap</TabsTrigger>
           <TabsTrigger value="paper">Paper</TabsTrigger>
           <TabsTrigger value="concepts">Prerequisites</TabsTrigger>

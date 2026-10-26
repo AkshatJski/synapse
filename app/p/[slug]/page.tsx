@@ -6,6 +6,7 @@ import { connection } from "next/server";
 import { ArrowUpRight, BookOpen, ExternalLink, Eye, FlaskConical, Sparkles } from "lucide-react";
 
 import { MarkdownContent } from "@/components/markdown";
+import { RoadmapActions } from "@/components/roadmap-actions";
 import { StepsList } from "@/components/steps-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -88,7 +89,7 @@ export async function generateMetadata({ params }: SharePageProps): Promise<Meta
 export default function SharePage({ params }: SharePageProps) {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 print:hidden">
         <Link href="/" className="flex items-center gap-2 text-sm font-medium">
           <Sparkles className="size-4 text-primary" />
           Synapse
@@ -177,10 +178,18 @@ async function SharedRoadmap({ params }: SharePageProps) {
           </p>
         )}
 
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Eye className="size-3.5" />
-          Read-only copy. Progress tracking belongs to whoever created this roadmap.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Eye className="size-3.5" />
+            Read-only copy. Progress tracking belongs to whoever created this roadmap.
+          </p>
+          <RoadmapActions
+            project={project}
+            steps={steps}
+            paper={paper}
+            includeProgress={false}
+          />
+        </div>
       </header>
 
       <Card>
@@ -196,7 +205,7 @@ async function SharedRoadmap({ params }: SharePageProps) {
       </Card>
 
       <Tabs defaultValue="roadmap" className="flex flex-col gap-4">
-        <TabsList>
+        <TabsList className="print:hidden">
           <TabsTrigger value="roadmap">Roadmap</TabsTrigger>
           <TabsTrigger value="paper">Paper</TabsTrigger>
           <TabsTrigger value="concepts">Prerequisites</TabsTrigger>

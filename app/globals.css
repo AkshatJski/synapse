@@ -128,3 +128,19 @@
     @apply font-sans;
   }
 }
+
+@media print {
+  @page {
+    margin: 18mm;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  /* The roadmap, not the chrome: the app shell is hidden with print:hidden. */
+  a[href] {
+    text-decoration: none;
+    color: inherit;
+  }
+}

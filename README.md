@@ -27,8 +27,10 @@ dense abstract into a step-by-step project roadmap you can actually ship.
    delete any roadmap from the dashboard; deleting one also kills its public
    link. "Try another paper" starts a new roadmap on the same topic.
 5. **Share** — publish a read-only link (`/p/<slug>`) that anyone can open
-   without an account. Opt-in, revocable, and it never exposes your profile or
-   your other roadmaps.
+   without an account. Opt-in, revocable, with a generated link preview, and it
+   never exposes your profile or your other roadmaps.
+6. **Keep it** — download the roadmap as Markdown or print it. Exports from a
+   shared link never include the owner's progress.
 
 ## Stack
 
@@ -76,12 +78,15 @@ app/
   dashboard/page.tsx    generator form + saved roadmaps
   project/[id]/page.tsx project workspace (roadmap / paper / prerequisites)
   p/[slug]/page.tsx     public read-only share view
+  p/[slug]/opengraph-image.tsx  link preview card (1200x630)
+  error.tsx, not-found.tsx  error boundary and 404
   api/generate/route.ts arXiv -> LLM -> Postgres, server-only, streams progress
   api/papers/route.ts   candidate search for the picker (reads only)
   actions/              server actions (sign out, toggle a step, sharing)
 lib/
   arxiv.ts              typed arXiv Atom client (search + fetch by id)
   papers.ts             candidate ranking, dedupe and previews
+  export.ts             roadmap -> Markdown (pure, testable)
   llm.ts                Groq/Gemini transport, JSON repair retry, provider failover
   roadmap.ts            zod schema for the LLM contract
   env.ts                the only place that reads process.env
@@ -112,10 +117,12 @@ Phases, acceptance criteria and the full backlog: **[ROADMAP.md](ROADMAP.md)**.
 - [x] `/api/generate` - LLM roadmap with strict JSON validation + repair retry
 - [x] Paper picker: three candidates, free shuffle, id-only handoff
 - [x] Project workspace with step tracking
-- [x] Public share links (read-only, opt-in, revocable)
+- [x] Public share links (read-only, opt-in, revocable) with generated OG cards
 - [x] Live generation progress (streamed stages, real paper title)
+- [x] Markdown export + print styles
+- [x] Error and not-found boundaries
 - [x] Rename / delete roadmaps
-- [x] CI: lint, env-less build and six offline regression specs on every push
+- [x] CI: lint, env-less build and seven offline regression specs on every push
 - [ ] Streaming roadmaps (progressive JSON steps as the model writes them)
 
 ## License
