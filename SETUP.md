@@ -38,7 +38,9 @@ Time: about 10 minutes.
 
 1. <https://aistudio.google.com/apikey> → Create API key. No credit card needed.
 2. Put it in `.env.local` as `GEMINI_API_KEY`.
-3. Model used: `gemini-2.5-flash` with `responseMimeType: application/json`
+3. Model used: `gemini-3.5-flash-lite` with `responseMimeType: application/json`
+   (override with `GEMINI_MODEL`). Note `gemini-2.5-flash` still appears in
+   `GET /v1beta/models` but returns 404 for new keys — a listing is not proof.
    (override with `GEMINI_MODEL` if that id is ever retired).
 
 ### Groq (fallback — fast, but only 8000 tokens/minute)
