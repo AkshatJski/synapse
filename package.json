@@ -12,9 +12,10 @@
     "lint": "eslint",
     "verify:arxiv": "node scripts/verify-arxiv.mts",
     "verify:arxiv:retry": "node scripts/verify-arxiv-retry.mts",
-    "verify:llm": "npx --yes tsx scripts/verify-llm.mts",
-    "verify:llm:json": "npx --yes tsx scripts/verify-llm-json.mts",
-    "verify:llm:failover": "npx --yes tsx scripts/verify-llm-failover.mts"
+    "verify:llm": "tsx scripts/verify-llm.mts",
+    "verify:llm:json": "tsx scripts/verify-llm-json.mts",
+    "verify:llm:failover": "tsx scripts/verify-llm-failover.mts",
+    "verify:offline": "npm run verify:arxiv:retry && npm run verify:llm:json && npm run verify:llm:failover"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -44,6 +45,7 @@
     "eslint-config-next": "16.4.2",
     "shadcn": "^4.22.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }
