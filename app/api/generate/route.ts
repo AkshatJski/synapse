@@ -12,6 +12,7 @@ import { isSupabaseConfigured } from "@/lib/env";
 import type { GenerateEvent } from "@/lib/generate-events";
 import { generateRoadmap, LlmError } from "@/lib/llm";
 import { DOMAINS, LANGUAGES, SKILL_LEVELS } from "@/lib/roadmap";
+import { logEvent } from "@/lib/events";
 import { generateLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import type { PaperRow } from "@/lib/types";
@@ -182,6 +183,13 @@ export async function POST(request: Request) {
     const pipelineStartedAt = Date.now();
     const streamFail = (status: number, message: string, code: string) =>
       send({ type: "error", status, message, code });
+
+    logEvent("generate_started", {
+      chosen: Boolean(paperId),
+      domain,
+      language,
+      skillLevel,
+    });
 
     // ------------------------------------------------------------ 2a. paper
     // Two ways in: an id from the picker (D41), or a fresh search ("surprise me").
@@ -421,6 +429,11 @@ export async function POST(request: Request) {
       paperMs,
       llmMs,
       saveMs: Date.now() - saveStartedAt,
+      totalMs: Date.now() - pipelineStartedAt,
+    });
+
+    logEvent("generate_done", {
+      chosen: Boolean(paperId),
       totalMs: Date.now() - pipelineStartedAt,
     });
 

@@ -24,3 +24,16 @@ export function isMissingSharingColumn(error: PostgrestLikeError | null | undefi
   if (error.code === "42703" || error.code === "PGRST204") return true;
   return /share_slug|shared_at/i.test(`${error.message ?? ""} ${error.details ?? ""}`);
 }
+
+/**
+ * True when `gallery_listed` does not exist yet (0003 not applied).
+ *
+ * Unlike the sharing check this must look at the column name even when the code
+ * is 42703: a missing `share_slug` also reports 42703, and telling the user to
+ * run 0003 when they actually need 0002 would send them in circles. The message
+ * from PostgREST names the column, so match on that.
+ */
+export function isMissingGalleryColumn(error: PostgrestLikeError | null | undefined): boolean {
+  if (!error) return false;
+  return /gallery_listed/i.test(`${error.message ?? ""} ${error.details ?? ""}`);
+}

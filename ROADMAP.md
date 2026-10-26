@@ -20,9 +20,11 @@ local. Anything marked ✅ is verified in production, not "works on my machine".
 | Progress | **streamed** stages from the server: searching → reading (real paper title) → planning → saving (D39) |
 | Workspace | roadmaps, ELI5 summary, prerequisites, roadmap/paper tabs, optimistic step tracking |
 | Sharing | opt-in `/p/<slug>`, read-only, revocable, anon RLS policy, generated OG card (D30–D33, D42) |
+| Gallery | **second opt-in** over shared rows, domain filter, no names, instant removal (D45) |
+| Analytics | Web Analytics page views; funnel as `[event]` logs (custom events are Pro-only) (D46) |
 | Export | Markdown download (progress for the owner, none for visitors) + print styles (D42) |
 | Management | rename + delete, two-step confirm, papers survive delete (D40) |
-| Safety | PPR-safe rendering everywhere (`connection()`), daily quota 10/user, RLS as the boundary |
+| Safety | PPR-safe rendering everywhere (`connection()`), daily quota 10/user, per-instance rate limits, security headers, RLS as the boundary (D44) |
 | CI | lint + **env-less** build + 8 offline specs, ~57 s, green on every push (D38) |
 | Bugs | 15 logged, 14 fixed, 0 open (`report.md`) |
 
@@ -112,13 +114,22 @@ response; the quota and limit paths return the documented status codes.
 
 ---
 
-## Next — v1.0 "Public" (only if the app earns it)
+## Shipped — v1.0 "Public" · 2026-10-26
 
-- **Public gallery** of link-shared roadmaps, opt-in only, filterable by domain.
-  Requires a moderation answer first; sharing is currently unlisted by design.
-- **Vercel Web Analytics** (free tier) + a small set of custom events
-  (`generate_started`, `generate_done`, `share_created`).
-- **README with screenshots/GIF** and a 60-second demo script.
+| Item | State |
+|---|---|
+| **Public gallery** of shared roadmaps, second opt-in, filterable by domain | ✅ `/gallery`; `gallery_listed` flag + check constraint; owner toggles it in the share panel; revoking the link removes the card |
+| **Moderation answer** | ✅ documented, not automated: no names/ids/profiles, narrow content surface, instant removal, manual report path — pre-review deliberately not claimed |
+| **Analytics** | ✅ Web Analytics page views (`@vercel/analytics`); funnel as `[event]` lines because custom events are Pro-only; durable counts from SQL |
+| **README with screenshots + 60-second demo** | ✅ `docs/screenshots/*`, demo section in `README.md` |
+
+Exit test: `/gallery` lists only rows with a live slug **and** the flag; an
+unlisted or revoked roadmap never appears; a missing 0003 shows instructions
+instead of a 500.
+
+> **Manual step:** run `supabase/migrations/0003_gallery.sql` in the Supabase SQL
+> editor to switch the gallery on. Until then the page explains what is missing
+> and the rest of the app is unaffected.
 
 ---
 
@@ -149,9 +160,9 @@ response; the quota and limit paths return the documented status codes.
 | C3 | Security headers / CSP | low | S | **done (v0.6)** |
 | C4 | Per-user rate limit (best-effort) | low | M | **done (v0.6)** |
 | C5 | Accessibility + responsive pass | med | M | **done (v0.6)** |
-| D1 | Public gallery | low | L | v1.0 |
-| D2 | Analytics + custom events | low | S | v1.0 |
-| D3 | Screenshots / demo script | med | S | v1.0 |
+| D1 | Public gallery (second opt-in, domain filter) | med | L | **done (v1.0)** |
+| D2 | Analytics (page views + server funnel) | low | S | **done (v1.0)** |
+| D3 | Screenshots / demo script | med | S | **done (v1.0)** |
 | X1 | Streaming roadmap content | low (now) | L | deferred |
 
 S = under an hour, M = an evening, L = a project.

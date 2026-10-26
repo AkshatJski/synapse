@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { LayoutDashboard, Sparkles, User } from "lucide-react";
+import { LayoutDashboard, LayoutGrid, Sparkles, User } from "lucide-react";
 
 import { signOut } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,10 @@ export async function SiteHeader() {
         </Link>
 
         <nav className="flex items-center gap-1 text-sm">
+          <Button variant="ghost" size="sm" render={<Link href="/gallery" />}>
+            <LayoutGrid className="size-4" />
+            Gallery
+          </Button>
           {displayName ? (
             <>
               <Button variant="ghost" size="sm" render={<Link href="/dashboard" />}>

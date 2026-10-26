@@ -15,7 +15,7 @@
 
 import { randomBytes } from "node:crypto";
 
-import { isMissingSharingColumn, type PostgrestLikeError } from "@/lib/sharing";
+import { isMissingGalleryColumn, isMissingSharingColumn, type PostgrestLikeError } from "@/lib/sharing";
 
 export interface ProjectActionResult {
   ok: boolean;
@@ -35,6 +35,9 @@ export const TITLE_MAX = 120;
 
 const MIGRATION_HINT =
   "Public links need the 0002_sharing.sql migration. Run it in the Supabase SQL editor, then try again.";
+
+const GALLERY_HINT =
+  "The gallery needs the 0003_gallery.sql migration. Run it in the Supabase SQL editor, then try again.";
 
 /* -------------------------------------------------------------------------- */
 /*  The tiny slice of Supabase these functions need                            */
@@ -257,16 +260,97 @@ export async function disableSharingWith(
 
   const { data, error } = await client
     .from("projects")
-    .update({ share_slug: null, shared_at: null })
+    .update({ share_slug: null, shared_at: null, gallery_listed: false })
     .eq("id", projectId)
     .select("id")
     .maybeSingle<{ id: string }>();
 
-  if (error) {
-    console.error("[sharing] disable failed", error);
+  // 0002 can be applied without 0003. On that schema `gallery_listed` is not a
+  // column yet, and the extra key would make revoking fail — so retry without it
+  // (the gallery query also requires a live slug, so nothing can linger there).
+  let revoked = { data, error };
+  if (error && isMissingGalleryColumn(error)) {
+    revoked = await client
+      .from("projects")
+      .update({ share_slug: null, shared_at: null })
+      .eq("id", projectId)
+      .select("id")
+      .maybeSingle<{ id: string }>();
+  }
+
+  if (revoked.error) {
+    console.error("[sharing] disable failed", revoked.error);
     return {
       ok: false,
-      error: isMissingSharingColumn(error) ? MIGRATION_HINT : "Could not stop sharing.",
+      error: isMissingSharingColumn(revoked.error) ? MIGRATION_HINT : "Could not stop sharing.",
+    };
+  }
+
+  if (!revoked.data) {
+    return { ok: false, error: "That roadmap does not exist, or it is not yours." };
+  }
+
+  revalidate(`/project/${projectId}`);
+  revalidate("/gallery");
+  return { ok: true };
+}
+
+/**
+ * Second opt-in: may this shared roadmap also appear in `/gallery`?
+ *
+ * A listing without a live slug is refused here *and* by a database check
+ * constraint, because a listed row with no link would render a dead card.
+ */
+export async function setGalleryListingWith(
+  client: ActionsClient,
+  projectId: string,
+  listed: boolean,
+  revalidate: Revalidate,
+): Promise<ShareResult> {
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+
+  if (!user) {
+    return { ok: false, error: "You are signed out. Sign in again to change the gallery." };
+  }
+
+  if (listed) {
+    const { data: existing, error: readError } = await client
+      .from("projects")
+      .select("share_slug")
+      .eq("id", projectId)
+      .maybeSingle<{ share_slug: string | null }>();
+
+    if (readError) {
+      console.error("[gallery] read failed", readError);
+      return {
+        ok: false,
+        error: isMissingSharingColumn(readError) ? MIGRATION_HINT : "Could not read that roadmap.",
+      };
+    }
+
+    if (!existing) {
+      return { ok: false, error: "That roadmap does not exist, or it is not yours." };
+    }
+
+    if (!existing.share_slug) {
+      return { ok: false, error: "Create a public link first, then list it in the gallery." };
+    }
+  }
+
+  const { data, error } = await client
+    .from("projects")
+    .update({ gallery_listed: listed })
+    .eq("id", projectId)
+    .select("gallery_listed")
+    .maybeSingle<{ gallery_listed: boolean }>();
+
+  if (error) {
+    console.error("[gallery] update failed", error);
+    return {
+      ok: false,
+      error: isMissingGalleryColumn(error) ? GALLERY_HINT : "Could not change the gallery listing.",
     };
   }
 
@@ -275,5 +359,6 @@ export async function disableSharingWith(
   }
 
   revalidate(`/project/${projectId}`);
+  revalidate("/gallery");
   return { ok: true };
 }

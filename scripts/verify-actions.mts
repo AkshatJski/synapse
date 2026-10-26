@@ -19,6 +19,7 @@ import {
   disableSharingWith,
   enableSharingWith,
   renameProjectWith,
+  setGalleryListingWith,
   TITLE_MAX,
   type ActionsClient,
   type QueryBuilder,
@@ -240,8 +241,61 @@ console.log("\n[10] sharing: signed out, and revoking");
   const result = await disableSharingWith(fake.client, "p1", revalidate);
 
   expect("disable ok", result.ok, true);
-  expect("slug is nulled, not kept dormant", fake.values(), { share_slug: null, shared_at: null });
+  expect("slug is nulled, not kept dormant", fake.values(), {
+    share_slug: null,
+    shared_at: null,
+    gallery_listed: false,
+  });
   expect("project revalidated", revalidated.includes("/project/p1"), true);
+  expect("gallery revalidated", revalidated.includes("/gallery"), true);
+}
+
+console.log("\n[11] gallery: a second opt-in, gated on a live share link");
+
+{
+  // Listing without a share link would render a dead card, so it is refused
+  // before any write.
+  const unshared = createFake({ read: { data: { share_slug: null }, error: null } });
+  const refused = await setGalleryListingWith(unshared.client, "p1", true, revalidate);
+  expect("refused", refused.ok, false);
+  expect("explains the order", /public link first/i.test(refused.error ?? ""), true);
+  expect("no update issued", unshared.calls.includes("update"), false);
+
+  const shared = createFake({
+    read: { data: { share_slug: "live-slug" }, error: null },
+    write: { data: { gallery_listed: true }, error: null },
+  });
+  const listed = await setGalleryListingWith(shared.client, "p1", true, revalidate);
+  expect("listed", listed.ok, true);
+  expect("writes only the flag", shared.values(), { gallery_listed: true });
+
+  const unlisted = createFake({ write: { data: { gallery_listed: false }, error: null } });
+  const removed = await setGalleryListingWith(unlisted.client, "p1", false, revalidate);
+  expect("unlisting needs no share check", removed.ok, true);
+  expect(
+    "no share lookup issued",
+    unlisted.calls.includes("select(share_slug)"),
+    false,
+  );
+}
+
+console.log("\n[12] gallery: migration and session failures");
+
+{
+  const missingColumn = createFake({
+    write: {
+      data: null,
+      error: { code: "42703", message: 'column "gallery_listed" does not exist' },
+    },
+  });
+  const result = await setGalleryListingWith(missingColumn.client, "p1", false, revalidate);
+  expect("fails", result.ok, false);
+  expect("mentions 0003", /0003_gallery\.sql/.test(result.error ?? ""), true);
+
+  const signedOut = createFake({ signedIn: false });
+  const denied = await setGalleryListingWith(signedOut.client, "p1", true, revalidate);
+  expect("requires a session", denied.ok, false);
+  expect("no table access", signedOut.touchedTable(), false);
 }
 
 if (failures > 0) {

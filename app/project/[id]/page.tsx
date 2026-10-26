@@ -17,7 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isSupabaseConfigured } from "@/lib/env";
-import { isMissingSharingColumn } from "@/lib/sharing";
+import { isMissingGalleryColumn, isMissingSharingColumn } from "@/lib/sharing";
 import { createClient } from "@/lib/supabase/server";
 import type { PaperRow, ProjectRow, StepRow } from "@/lib/types";
 
@@ -73,16 +73,31 @@ async function ProjectContent({ params }: ProjectPageProps) {
 
   let { data: projectData, error: projectError } = await supabase
     .from("projects")
-    .select(`${baseColumns}, share_slug, shared_at, papers(*)`)
+    .select(`${baseColumns}, share_slug, shared_at, gallery_listed, papers(*)`)
     .eq("id", id)
     .maybeSingle();
+
+  // Two optional migrations, two separate fallbacks. 0003 can be missing while
+  // 0002 is applied, and that must cost the owner only the gallery toggle — not
+  // the share link that already exists in the wild.
+  let galleryReady = true;
+  let sharingReady = true;
+
+  if (projectError && isMissingGalleryColumn(projectError)) {
+    galleryReady = false;
+    ({ data: projectData, error: projectError } = await supabase
+      .from("projects")
+      .select(`${baseColumns}, share_slug, shared_at, papers(*)`)
+      .eq("id", id)
+      .maybeSingle());
+  }
 
   // The share columns only exist after 0002_sharing.sql. Falling back keeps every
   // existing roadmap usable instead of turning the page into a 404 because a
   // migration has not been run yet.
-  let sharingReady = true;
   if (projectError && isMissingSharingColumn(projectError)) {
     sharingReady = false;
+    galleryReady = false;
     ({ data: projectData, error: projectError } = await supabase
       .from("projects")
       .select(`${baseColumns}, papers(*)`)
@@ -172,6 +187,8 @@ async function ProjectContent({ params }: ProjectPageProps) {
           initialSlug={project.share_slug ?? null}
           origin={origin}
           sharingReady={sharingReady}
+          galleryReady={galleryReady}
+          initialListed={Boolean((project as { gallery_listed?: boolean }).gallery_listed)}
         />
       </div>
 

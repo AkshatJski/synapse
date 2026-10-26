@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, Copy, ExternalLink, Globe, Link2, Lock, X } from "lucide-react";
+import { Check, Copy, ExternalLink, Globe, LayoutGrid, Link2, Lock, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { disableSharing, enableSharing } from "@/app/actions/sharing";
+import { disableSharing, enableSharing, setGalleryListing } from "@/app/actions/sharing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -15,6 +15,10 @@ interface SharePanelProps {
   origin: string;
   /** False when the 0002 migration has not been applied yet. */
   sharingReady: boolean;
+  /** False when the 0003 migration has not been applied yet. */
+  galleryReady: boolean;
+  /** Current second opt-in: listed in `/gallery` in addition to being shared. */
+  initialListed: boolean;
 }
 
 /**
@@ -23,8 +27,16 @@ interface SharePanelProps {
  * Sharing is off by default and reversible: the slug is discarded on revoke, so
  * a re-share mints a new URL instead of resurrecting an old one.
  */
-export function SharePanel({ projectId, initialSlug, origin, sharingReady }: SharePanelProps) {
+export function SharePanel({
+  projectId,
+  initialSlug,
+  origin,
+  sharingReady,
+  galleryReady,
+  initialListed,
+}: SharePanelProps) {
   const [slug, setSlug] = useState(initialSlug);
+  const [listed, setListed] = useState(initialListed);
   const [copied, setCopied] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -68,6 +80,7 @@ export function SharePanel({ projectId, initialSlug, origin, sharingReady }: Sha
         return;
       }
       setSlug(null);
+      setListed(false);
       setCopied(false);
       toast.success("Sharing stopped.");
     });
@@ -81,6 +94,18 @@ export function SharePanel({ projectId, initialSlug, origin, sharingReady }: Sha
     } catch {
       toast.error("Could not copy. Select the link and copy it manually.");
     }
+  }
+
+  function handleGalleryToggle(next: boolean) {
+    startTransition(async () => {
+      const result = await setGalleryListing(projectId, next);
+      if (!result.ok) {
+        toast.error(result.error ?? "Could not change the gallery listing.");
+        return;
+      }
+      setListed(next);
+      toast.success(next ? "Listed in the gallery." : "Removed from the gallery.");
+    });
   }
 
   if (!slug) {
@@ -160,6 +185,28 @@ export function SharePanel({ projectId, initialSlug, origin, sharingReady }: Sha
             Stop sharing
           </Button>
         </div>
+      </div>
+
+      <div className="flex items-start gap-3 rounded-lg border border-dashed p-3">
+        <input
+          id={`gallery-${projectId}`}
+          type="checkbox"
+          checked={listed}
+          disabled={pending || !galleryReady}
+          onChange={(event) => handleGalleryToggle(event.target.checked)}
+          className="mt-0.5 size-4 shrink-0 accent-primary"
+        />
+        <label htmlFor={`gallery-${projectId}`} className="flex flex-col gap-0.5 text-sm">
+          <span className="flex items-center gap-1.5 font-medium">
+            <LayoutGrid className="size-3.5 text-muted-foreground" />
+            List in the public gallery
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {galleryReady
+              ? "Anyone can browse the title, domain and steps. Your name and other roadmaps stay private, and unticking removes it immediately."
+              : "The gallery needs the 0003_gallery.sql migration. Run it in the Supabase SQL editor to enable this."}
+          </span>
+        </label>
       </div>
     </div>
   );
