@@ -6,6 +6,7 @@ import { connection } from "next/server";
 import { ArrowLeft, BookOpen, ExternalLink, FlaskConical, Globe } from "lucide-react";
 
 import { MarkdownContent } from "@/components/markdown";
+import { ProjectActions } from "@/components/project-actions";
 import { SetupNotice } from "@/components/setup-notice";
 import { SharePanel } from "@/components/share-panel";
 import { StepsList } from "@/components/steps-list";
@@ -109,21 +110,25 @@ async function ProjectContent({ params }: ProjectPageProps) {
   return (
     <>
       <header className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">{project.domain}</Badge>
-          <Badge variant="outline">{project.language}</Badge>
-          <Badge variant="outline" className="capitalize">
-            {project.skill_level}
-          </Badge>
-          <span className="text-xs text-muted-foreground">
-            {dateFormatter.format(new Date(project.created_at))}
-          </span>
-          {project.share_slug && (
-            <Badge variant="outline" className="gap-1 text-[0.7rem]">
-              <Globe className="size-3" />
-              Public
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">{project.domain}</Badge>
+            <Badge variant="outline">{project.language}</Badge>
+            <Badge variant="outline" className="capitalize">
+              {project.skill_level}
             </Badge>
-          )}
+            <span className="text-xs text-muted-foreground">
+              {dateFormatter.format(new Date(project.created_at))}
+            </span>
+            {project.share_slug && (
+              <Badge variant="outline" className="gap-1 text-[0.7rem]">
+                <Globe className="size-3" />
+                Public
+              </Badge>
+            )}
+          </div>
+
+          <ProjectActions projectId={project.id} title={project.title} />
         </div>
 
         <h1 className="text-3xl font-semibold tracking-tight text-balance">{project.title}</h1>

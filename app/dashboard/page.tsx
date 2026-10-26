@@ -5,6 +5,7 @@ import { connection } from "next/server";
 import { ArrowRight, BookOpen, FolderOpen } from "lucide-react";
 
 import { GenerateForm } from "@/components/generate-form";
+import { ProjectActions } from "@/components/project-actions";
 import { SetupNotice } from "@/components/setup-notice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -140,23 +141,27 @@ async function ProjectsSection() {
                 />
               </div>
 
-              <div className="flex items-center justify-between">
-                <Button variant="ghost" size="sm" render={<Link href={`/project/${project.id}`} />}>
-                  Open roadmap
-                  <ArrowRight className="size-3.5" />
-                </Button>
-                {project.papers?.abs_url && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    render={
-                      <a href={project.papers.abs_url} target="_blank" rel="noreferrer noopener" />
-                    }
-                  >
-                    <BookOpen className="size-3.5" />
-                    Paper
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" render={<Link href={`/project/${project.id}`} />}>
+                    Open roadmap
+                    <ArrowRight className="size-3.5" />
                   </Button>
-                )}
+                  {project.papers?.abs_url && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      render={
+                        <a href={project.papers.abs_url} target="_blank" rel="noreferrer noopener" />
+                      }
+                    >
+                      <BookOpen className="size-3.5" />
+                      Paper
+                    </Button>
+                  )}
+                </div>
+
+                <ProjectActions compact projectId={project.id} title={project.title} />
               </div>
             </CardContent>
           </Card>
