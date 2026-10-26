@@ -16,7 +16,8 @@
     "verify:llm:json": "tsx scripts/verify-llm-json.mts",
     "verify:llm:failover": "tsx scripts/verify-llm-failover.mts",
     "verify:ndjson": "tsx scripts/verify-ndjson.mts",
-    "verify:offline": "npm run verify:ndjson && npm run verify:arxiv:retry && npm run verify:llm:json && npm run verify:llm:failover"
+    "verify:papers": "tsx scripts/verify-papers.mts",
+    "verify:offline": "npm run verify:ndjson && npm run verify:papers && npm run verify:arxiv:retry && npm run verify:llm:json && npm run verify:llm:failover"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

@@ -17,14 +17,15 @@ dense abstract into a step-by-step project roadmap you can actually ship.
 
 1. **Choose** a domain (Computer Vision, NLP, RL…), a language (Python,
    TypeScript, Rust…) and a skill level (Beginner / Intermediate / Advanced).
-2. **Search** — Synapse queries the arXiv Atom API for a relevant recent paper
-   and caches its metadata. Progress is streamed back as it happens: you see the
-   search, the paper it picked, the planning step, then the save.
-3. **Generate** — an LLM translates the abstract into an ELI5 summary,
+2. **Pick the paper** — Synapse shows three recent candidates with title,
+   category, date and a short preview. Shuffle freely: nothing is generated and
+   no quota is spent until you choose. Or let it pick for you.
+3. **Generate** — progress streams back as it happens: the paper being read, the
+   planning step, the save. The LLM turns the abstract into an ELI5 summary,
    prerequisite concepts, and ordered build steps with code.
 4. **Build** — work through the roadmap, ticking steps off as you go. Rename or
    delete any roadmap from the dashboard; deleting one also kills its public
-   link.
+   link. "Try another paper" starts a new roadmap on the same topic.
 5. **Share** — publish a read-only link (`/p/<slug>`) that anyone can open
    without an account. Opt-in, revocable, and it never exposes your profile or
    your other roadmaps.
@@ -75,10 +76,12 @@ app/
   dashboard/page.tsx    generator form + saved roadmaps
   project/[id]/page.tsx project workspace (roadmap / paper / prerequisites)
   p/[slug]/page.tsx     public read-only share view
-  api/generate/route.ts arXiv -> LLM -> Postgres, server-only
+  api/generate/route.ts arXiv -> LLM -> Postgres, server-only, streams progress
+  api/papers/route.ts   candidate search for the picker (reads only)
   actions/              server actions (sign out, toggle a step, sharing)
 lib/
-  arxiv.ts              typed arXiv Atom client
+  arxiv.ts              typed arXiv Atom client (search + fetch by id)
+  papers.ts             candidate ranking, dedupe and previews
   llm.ts                Groq/Gemini transport, JSON repair retry, provider failover
   roadmap.ts            zod schema for the LLM contract
   env.ts                the only place that reads process.env
@@ -106,12 +109,13 @@ Phases, acceptance criteria and the full backlog: **[ROADMAP.md](ROADMAP.md)**.
 - [x] Next.js + Tailwind + shadcn scaffold
 - [x] Typed arXiv client with retry/backoff
 - [x] Supabase schema, RLS, GitHub OAuth + email magic link
-- [x] `/api/generate` — LLM roadmap with strict JSON validation + repair retry
+- [x] `/api/generate` - LLM roadmap with strict JSON validation + repair retry
+- [x] Paper picker: three candidates, free shuffle, id-only handoff
 - [x] Project workspace with step tracking
 - [x] Public share links (read-only, opt-in, revocable)
 - [x] Live generation progress (streamed stages, real paper title)
 - [x] Rename / delete roadmaps
-- [x] CI: lint, env-less build and five offline regression specs on every push
+- [x] CI: lint, env-less build and six offline regression specs on every push
 - [ ] Streaming roadmaps (progressive JSON steps as the model writes them)
 
 ## License

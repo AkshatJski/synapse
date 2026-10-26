@@ -465,3 +465,32 @@ export async function searchArxivPapers(
   const xml = await fetchAtomFeed(`${ARXIV_API_URL}?${params.toString()}`, revalidateSeconds);
   return parseAtomFeed(xml);
 }
+
+/**
+ * Fetches exactly one paper by its arXiv id.
+ *
+ * Used when the user picks a paper from the candidate list (D41). Re-fetching by
+ * id instead of trusting the client's copy keeps the abstract, version and links
+ * authoritative — the browser only ever supplies an identifier.
+ *
+ * @throws {ArxivError} INVALID_QUERY for a malformed id, plus the transport codes.
+ */
+export async function getArxivPaper(
+  arxivId: string,
+  options: { revalidateSeconds?: number } = {},
+): Promise<ArxivPaper | null> {
+  const { revalidateSeconds = 3600 } = options;
+  const id = (arxivId ?? "").trim();
+
+  // Modern: 2301.12345 / 2301.1234 · legacy: cs/0112017, math.GT/0309136
+  const valid = /^(?:\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?\/\d{7})$/i.test(id);
+  if (id.length > 32 || !valid) {
+    throw new ArxivError("INVALID_QUERY", "That does not look like an arXiv identifier.");
+  }
+
+  const params = new URLSearchParams({ id_list: id, max_results: "1" });
+  const xml = await fetchAtomFeed(`${ARXIV_API_URL}?${params.toString()}`, revalidateSeconds);
+  const papers = parseAtomFeed(xml);
+
+  return papers.find((paper) => paper.arxivId === id) ?? papers[0] ?? null;
+}

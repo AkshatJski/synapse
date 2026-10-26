@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { ArxivError, isTransientArxivError, searchArxivPapers, type ArxivPaper } from "@/lib/arxiv";
+import {
+  ArxivError,
+  getArxivPaper,
+  isTransientArxivError,
+  searchArxivPapers,
+  type ArxivPaper,
+} from "@/lib/arxiv";
 import { isSupabaseConfigured } from "@/lib/env";
 import type { GenerateEvent } from "@/lib/generate-events";
 import { generateRoadmap, LlmError } from "@/lib/llm";
-import { SKILL_LEVELS } from "@/lib/roadmap";
+import { DOMAINS, LANGUAGES, SKILL_LEVELS } from "@/lib/roadmap";
 import { createClient } from "@/lib/supabase/server";
 import type { PaperRow } from "@/lib/types";
 
@@ -15,9 +21,13 @@ export const maxDuration = 60;
 const DAILY_GENERATION_LIMIT = 10;
 
 const BodySchema = z.object({
-  domain: z.string().trim().min(2).max(80),
-  language: z.string().trim().min(1).max(40),
+  // Enums, not free text: the UI only offers these, and it bounds how many
+  // distinct arXiv queries the API can be made to issue.
+  domain: z.enum(DOMAINS),
+  language: z.enum(LANGUAGES),
   skillLevel: z.enum(SKILL_LEVELS),
+  /** Present when the user picked a paper; absent means "surprise me". */
+  paperId: z.string().trim().min(1).max(32).optional(),
 });
 
 /** JSON error with a message that is safe to show a user verbatim. */
@@ -119,7 +129,7 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return fail(400, "Pick a domain, a language and a valid skill level.", "BAD_REQUEST");
   }
-  const { domain, language, skillLevel } = parsed.data;
+  const { domain, language, skillLevel, paperId } = parsed.data;
 
   // ------------------------------------------------------------- 1. backend
   if (!isSupabaseConfigured()) {
@@ -160,68 +170,113 @@ export async function POST(request: Request) {
     const streamFail = (status: number, message: string, code: string) =>
       send({ type: "error", status, message, code });
 
-    // ------------------------------------------------------------ 2a. arXiv
-    let papers: ArxivPaper[] = [];
+    // ------------------------------------------------------------ 2a. paper
+    // Two ways in: an id from the picker (D41), or a fresh search ("surprise me").
+    let paper: ArxivPaper;
     const arxivStartedAt = Date.now();
-    send({ type: "stage", stage: "searching" });
 
-    try {
-      papers = await searchArxivPapers(`${domain} ${language}`, 8);
-      if (papers.length === 0) {
-        // Second chance with a narrower query: the language term may have filtered
-        // out every relevant paper.
-        papers = await searchArxivPapers(domain, 8, { sortBy: "submittedDate" });
-      }
-    } catch (error) {
-      const elapsedMs = Date.now() - arxivStartedAt;
+    if (paperId) {
+      // Re-fetch by id so the abstract, version and links are authoritative — the
+      // browser only ever supplied an identifier, never paper content.
+      send({ type: "stage", stage: "reading" });
 
-      if (error instanceof ArxivError) {
-        // This log line is the whole point: without it an outage produces a vague
-        // message for the user and nothing at all for whoever debugs it.
-        console.error("[generate] arxiv failed", {
-          code: error.code,
-          status: error.status,
-          elapsedMs,
-          query: `${domain} ${language}`,
-        });
+      try {
+        const fetched = await getArxivPaper(paperId);
+        if (!fetched) {
+          streamFail(404, "That paper is no longer available on arXiv. Pick another one.", "NO_PAPER");
+          return;
+        }
+        paper = fetched;
+      } catch (error) {
+        const elapsedMs = Date.now() - arxivStartedAt;
 
-        if (error.code === "RATE_LIMITED") {
+        if (error instanceof ArxivError) {
+          console.error("[generate] paper lookup failed", {
+            code: error.code,
+            status: error.status,
+            elapsedMs,
+            paperId,
+          });
+
           streamFail(
-            503,
-            error.status === 429
-              ? "arXiv is rate-limiting requests right now. Wait about a minute, then try again."
-              : "arXiv is temporarily unavailable. Wait a minute, then try again.",
+            error.code === "INVALID_QUERY" ? 400 : isTransientArxivError(error) ? 503 : 502,
+            error.code === "INVALID_QUERY"
+              ? "That paper identifier is not valid. Pick a paper from the list."
+              : isTransientArxivError(error)
+                ? "arXiv is not responding right now. Please try again."
+                : "Could not load that paper from arXiv.",
             error.code,
           );
           return;
         }
 
-        streamFail(
-          isTransientArxivError(error) ? 503 : 400,
-          isTransientArxivError(error)
-            ? "The paper library (arXiv) is not responding right now. Please try again in a moment."
-            : "That search could not be run against arXiv. Try a broader domain.",
-          error.code,
-        );
+        console.error("[generate] paper lookup threw", { elapsedMs, error });
+        streamFail(502, "Could not load that paper from arXiv.", "ARXIV_FAILED");
+        return;
+      }
+    } else {
+      let papers: ArxivPaper[] = [];
+      send({ type: "stage", stage: "searching" });
+
+      try {
+        papers = await searchArxivPapers(`${domain} ${language}`, 8);
+        if (papers.length === 0) {
+          // Second chance with a narrower query: the language term may have filtered
+          // out every relevant paper.
+          papers = await searchArxivPapers(domain, 8, { sortBy: "submittedDate" });
+        }
+      } catch (error) {
+        const elapsedMs = Date.now() - arxivStartedAt;
+
+        if (error instanceof ArxivError) {
+          // This log line is the whole point: without it an outage produces a vague
+          // message for the user and nothing at all for whoever debugs it.
+          console.error("[generate] arxiv failed", {
+            code: error.code,
+            status: error.status,
+            elapsedMs,
+            query: `${domain} ${language}`,
+          });
+
+          if (error.code === "RATE_LIMITED") {
+            streamFail(
+              503,
+              error.status === 429
+                ? "arXiv is rate-limiting requests right now. Wait about a minute, then try again."
+                : "arXiv is temporarily unavailable. Wait a minute, then try again.",
+              error.code,
+            );
+            return;
+          }
+
+          streamFail(
+            isTransientArxivError(error) ? 503 : 400,
+            isTransientArxivError(error)
+              ? "The paper library (arXiv) is not responding right now. Please try again in a moment."
+              : "That search could not be run against arXiv. Try a broader domain.",
+            error.code,
+          );
+          return;
+        }
+
+        console.error("[generate] arxiv threw a non-ArxivError", { elapsedMs, error });
+        streamFail(502, "Could not reach arXiv.", "ARXIV_FAILED");
         return;
       }
 
-      console.error("[generate] arxiv threw a non-ArxivError", { elapsedMs, error });
-      streamFail(502, "Could not reach arXiv.", "ARXIV_FAILED");
-      return;
+      const picked = pickPaper(papers);
+      if (!picked) {
+        streamFail(
+          404,
+          "No arXiv paper matched that combination. Try a broader domain such as “Computer Vision”.",
+          "NO_PAPER",
+        );
+        return;
+      }
+      paper = picked;
     }
 
-    const paper = pickPaper(papers);
-    if (!paper) {
-      streamFail(
-        404,
-        "No arXiv paper matched that combination. Try a broader domain such as “Computer Vision”.",
-        "NO_PAPER",
-      );
-      return;
-    }
-
-    // Reporting the paper the moment it is chosen is the useful half of "reading":
+    // Reporting the paper the moment it is known is the useful half of "reading":
     // the wait after this point is the LLM, and the user can already see what the
     // roadmap will be about.
     send({

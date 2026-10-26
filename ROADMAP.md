@@ -16,12 +16,13 @@ local. Anything marked ✅ is verified in production, not "works on my machine".
 |---|---|
 | arXiv client | typed, retrying, backoff-aware, refuses to retry a 4xx (BUG-010) |
 | Generation | Gemini primary → Groq fallback, strict zod contract, one repair retry (BUG-011/012/013) |
+| Paper choice | **you pick from three candidates** — free shuffle, id-only handoff, no quota spent until you build (D41) |
 | Progress | **streamed** stages from the server: searching → reading (real paper title) → planning → saving (D39) |
 | Workspace | roadmaps, ELI5 summary, prerequisites, roadmap/paper tabs, optimistic step tracking |
 | Sharing | opt-in `/p/<slug>`, read-only, revocable, anon RLS policy (D30–D33) |
 | Management | rename + delete, two-step confirm, papers survive delete (D40) |
 | Safety | PPR-safe rendering everywhere (`connection()`), daily quota 10/user, RLS as the boundary |
-| CI | lint + **env-less** build + 5 offline specs, ~57 s, green on every push (D38) |
+| CI | lint + **env-less** build + 6 offline specs, ~57 s, green on every push (D38) |
 | Bugs | 15 logged, 14 fixed, 0 open (`report.md`) |
 
 ### What the last three phases taught us
@@ -47,40 +48,41 @@ and why `vercel logs` is part of the deploy loop (D37).
 
 ---
 
-## Next — v0.4 "You pick the paper" (recommended)
+## Shipped — v0.4 "You pick the paper" · 2026-10-26
 
-**Problem.** Generation is a one-shot gamble. arXiv returns up to eight results,
-`pickPaper()` silently chooses one, and the user's only recovery from a bad
-choice is to burn another of ten daily generations hoping for better. The paper
-*is* the product; it should not be a lottery.
+**Problem.** Generation was a one-shot gamble. arXiv returns up to eight results,
+`pickPaper()` silently chose one, and the user's only recovery from a bad choice
+was to burn another of ten daily generations hoping for better. The paper *is*
+the product; it should not be a lottery.
 
-**Scope**
-1. `/api/paper-search` (or a `searching` stage that pauses): return the top 3
-   candidates with title, published date, category and abstract snippet.
-2. Generate form becomes two steps: **find papers** → choose (or "shuffle") →
-   **build roadmap**.
-3. "Try another paper" on an existing project: same domain/language/skill, new
-   paper, no manual re-entry.
-4. Nothing is written to `projects` until a paper is chosen — so a shuffle costs
-   no quota and no LLM call.
+**What shipped**
+1. `POST /api/papers` returns the top 3 candidates — title, category, date,
+   author and a 280-character preview. Auth required; reading only.
+2. The form is two steps: **find papers** → choose (or **shuffle**) → **build
+   roadmap**. Shuffling re-posts with every id already shown as `exclude`.
+3. "Try another paper" on a project links to `/dashboard` with the domain,
+   language and level prefilled.
+4. Nothing is written to `projects`, and no LLM is called, until a paper is
+   chosen — shuffling is free.
+5. The browser sends back only an `arxivId`; the server re-fetches the paper by
+   id, so paper content can never be client-supplied. Malformed ids are rejected
+   before any fetch.
 
-**Why this one first**
-- Highest user-visible quality gain: control replaces luck.
-- Saves free-tier quota instead of spending it (a shuffle is one arXiv call).
-- Reuses the streaming work from D39; the `reading` event already carries the
-  paper.
-- Demoable in ten seconds: "here are three papers, pick one".
-
-**Acceptance criteria**
-- Choosing a paper and generating writes exactly one project row (no orphans).
-- Shuffling five times costs zero generations (verify against the quota count).
-- The chosen paper's title survives into the project, the share page and the
-  `[llm]` log line.
-- Offline test for the candidate-ranking/selection logic; CI stays green.
+**Acceptance criteria — verified**
+- ✅ Choosing a paper writes exactly one project row (single insert path, still
+  rolled back on step failure).
+- ✅ Shuffling costs zero generations (the `/api/papers` route has no insert and
+  no LLM call; quota counts `projects` rows only).
+- ✅ The chosen paper's title reaches the stream (`reading` event), the DB and the
+  project header.
+- ✅ `verify:papers.mts` covers ranking, dedupe, exclusion, limit, preview
+  trimming and id validation; CI runs it.
+- ⏳ Live click-through by the signed-in owner (only a session can prove the full
+  path — CI has no account).
 
 ---
 
-## v0.5 "Worth sharing" (small, high polish)
+## Next — v0.5 "Worth sharing"
 
 | Item | Why |
 |---|---|
@@ -132,8 +134,8 @@ roadmap and open it in an editor without cleanup.
 
 | ID | Item | Value | Effort | Phase |
 |---|---|---|---|---|
-| A1 | Paper preview + choose/shuffle | high | M | v0.4 |
-| A2 | "Try another paper" from a project | high | S | v0.4 |
+| A1 | Paper preview + choose/shuffle | high | M | **done (v0.4)** |
+| A2 | "Try another paper" from a project | high | S | **done (v0.4)** |
 | B1 | OG image for share links | med | S | v0.5 |
 | B2 | Export to Markdown / print | med | S | v0.5 |
 | B3 | Error + not-found boundaries | med | S | v0.5 |

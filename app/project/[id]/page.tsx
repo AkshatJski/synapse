@@ -3,7 +3,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
-import { ArrowLeft, BookOpen, ExternalLink, FlaskConical, Globe } from "lucide-react";
+import { ArrowLeft, BookOpen, ExternalLink, FlaskConical, Globe, RefreshCw } from "lucide-react";
 
 import { MarkdownContent } from "@/components/markdown";
 import { ProjectActions } from "@/components/project-actions";
@@ -107,6 +107,11 @@ async function ProjectContent({ params }: ProjectPageProps) {
   const steps = (stepsData ?? []) as StepRow[];
   const paper = project.papers;
 
+  // Same topic, same stack, same level - only the paper changes (D41).
+  const anotherPaperHref = `/dashboard?domain=${encodeURIComponent(
+    project.domain,
+  )}&language=${encodeURIComponent(project.language)}&skill=${encodeURIComponent(project.skill_level)}`;
+
   return (
     <>
       <header className="flex flex-col gap-3">
@@ -128,7 +133,13 @@ async function ProjectContent({ params }: ProjectPageProps) {
             )}
           </div>
 
-          <ProjectActions projectId={project.id} title={project.title} />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" render={<Link href={anotherPaperHref} />}>
+              <RefreshCw className="size-3.5" />
+              Try another paper
+            </Button>
+            <ProjectActions projectId={project.id} title={project.title} />
+          </div>
         </div>
 
         <h1 className="text-3xl font-semibold tracking-tight text-balance">{project.title}</h1>

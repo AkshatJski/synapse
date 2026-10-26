@@ -25,17 +25,28 @@ export const metadata = {
   title: "Dashboard",
 };
 
-export default function DashboardPage() {
+type DashboardPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default function DashboardPage({ searchParams }: DashboardPageProps) {
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-6 py-12">
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight">New project</h1>
         <p className="text-sm text-muted-foreground">
-          Pick a domain, a language and your level. Synapse finds the paper and writes the roadmap.
+          Pick a domain, a language and your level, then choose the paper. Synapse writes the
+          roadmap from there.
         </p>
       </div>
 
-      {isSupabaseConfigured() ? <GenerateForm /> : <SetupNotice />}
+      {isSupabaseConfigured() ? (
+        <Suspense fallback={<GenerateFormSkeleton />}>
+          <FormSection searchParams={searchParams} />
+        </Suspense>
+      ) : (
+        <SetupNotice />
+      )}
 
       <section className="flex flex-col gap-4">
         <h2 className="text-lg font-semibold tracking-tight">Your roadmaps</h2>
@@ -44,6 +55,28 @@ export default function DashboardPage() {
         </Suspense>
       </section>
     </main>
+  );
+}
+
+/**
+ * Awaits `searchParams`, so it lives behind the Suspense boundary above — the
+ * static shell renders the skeleton while params resolve.
+ *
+ * This is how "Try another paper" on a project page arrives with its domain,
+ * language and level already filled in.
+ */
+async function FormSection({ searchParams }: Pick<DashboardPageProps, "searchParams">) {
+  const params = await searchParams;
+
+  const first = (value: string | string[] | undefined) =>
+    Array.isArray(value) ? value[0] : value;
+
+  return (
+    <GenerateForm
+      initialDomain={first(params.domain)}
+      initialLanguage={first(params.language)}
+      initialSkill={first(params.skill)}
+    />
   );
 }
 
@@ -168,6 +201,24 @@ async function ProjectsSection() {
         );
       })}
     </div>
+  );
+}
+
+function GenerateFormSkeleton() {
+  return (
+    <Card>
+      <CardContent className="pt-6">
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[0, 1, 2].map((index) => (
+            <div key={index} className="flex flex-col gap-2">
+              <Skeleton className="h-4 w-16" />
+              <Skeleton className="h-9 w-full" />
+            </div>
+          ))}
+        </div>
+        <Skeleton className="mt-5 h-9 w-36" />
+      </CardContent>
+    </Card>
   );
 }
 
