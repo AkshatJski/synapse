@@ -79,7 +79,55 @@ magic link → pick a domain, language and level.
 | `/dashboard` without env | amber "Connect Supabase" card, no crash |
 | `POST /api/generate` without env | `503 { "code": "NOT_CONFIGURED" }` |
 
-## Troubleshooting
+## 6. Deploy to Vercel (free tier)
+
+The repo is already deployed at <https://synapse-seven-ebon.vercel.app>, but the
+steps are worth recording because two things bite:
+
+1. **Directory name.** `vercel` derives the project name from the folder. A path
+   like `C:\Folder D\Synapse` is not a legal project name (spaces + capitals), so
+   link explicitly:
+   ```bash
+   vercel link --yes --project synapse
+   vercel --prod --yes
+   ```
+2. **Git auto-deploy.** `vercel git connect` fails with *"Make sure there aren't
+   any typos and that you have access to the repository"* when the Vercel GitHub
+   App is not installed on the repo. Install it once:
+
+   <https://github.com/apps/vercel/installations/new> → select
+   `AkshatJski/synapse` → then re-run `vercel git connect`, or connect the repo
+   from **Project → Settings → Git**.
+
+### Environment variables on Vercel
+
+Add the same three values you put in `.env.local`:
+
+```bash
+vercel env add NEXT_PUBLIC_SUPABASE_URL production
+vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY production
+vercel env add GROQ_API_KEY production
+```
+
+Repeat with `preview` (and `development` if you use `vercel env pull`). Then
+redeploy — env changes do not apply to an existing deployment:
+
+```bash
+vercel --prod
+```
+
+### Supabase redirect URLs for production
+
+**Authentication → URL Configuration** must contain both origins, or OAuth and
+magic links will land on `localhost` and fail:
+
+- Site URL: `https://synapse-seven-ebon.vercel.app`
+- Redirect URLs:
+  - `http://localhost:3000/auth/callback`
+  - `https://synapse-seven-ebon.vercel.app/auth/callback`
+
+## 7. Troubleshooting
+
 
 | Symptom | Cause | Fix |
 |---|---|---|

@@ -48,3 +48,6 @@ Flow.md
 learn.md
 report.md
 TECHNICAL-GUIDE.md
+
+.vercel
+.env*
