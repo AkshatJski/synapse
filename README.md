@@ -42,9 +42,9 @@ real share prints the roadmap's own title.</sub>
    never exposes your profile or your other roadmaps.
 6. **Keep it** — download the roadmap as Markdown or print it. Exports from a
    shared link never include the owner's progress.
-7. **Browse** — the [public gallery](/gallery) shows roadmaps whose owners opted
-   in a second time, filterable by domain. No names, no profiles, and one click
-   removes a roadmap from it.
+7. **Browse** — the [public gallery](https://synapse-seven-ebon.vercel.app/gallery)
+   shows roadmaps whose owners opted in a second time, filterable by domain. No
+   names, no profiles, and one click removes a roadmap from it.
 
 ## 60-second demo
 
