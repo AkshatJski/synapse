@@ -21,13 +21,18 @@ Time: about 10 minutes.
    It adds `share_slug` / `shared_at` to `projects` and the read policies that make
    public share links work. Until it runs, the app still works and the project page
    shows a "run the migration" hint instead of a share button.
-5. **Authentication → Providers**
+5. **SQL Editor → New query** — paste
+   [`supabase/migrations/0003_gallery.sql`](supabase/migrations/0003_gallery.sql) and run it.
+   It adds `gallery_listed` (a second, separate opt-in) and the index the `/gallery`
+   page reads. Without it, `/gallery` shows a "not switched on yet" card and the
+   share panel disables the listing checkbox; sharing itself keeps working.
+6. **Authentication → Providers**
    - **Email**: enabled by default. Magic links work with no extra setup.
    - **GitHub** (optional): create an OAuth app at
      <https://github.com/settings/developers> →
      callback URL `https://<your-project-ref>.supabase.co/auth/v1/callback`,
      then paste the client ID + secret into Supabase.
-6. **Authentication → URL Configuration**
+7. **Authentication → URL Configuration**
    - Site URL: `http://localhost:3000`
    - Redirect URLs: `http://localhost:3000/auth/callback`
    - Add your production URLs later (e.g. `https://synapse.vercel.app/auth/callback`).

@@ -127,9 +127,9 @@ Exit test: `/gallery` lists only rows with a live slug **and** the flag; an
 unlisted or revoked roadmap never appears; a missing 0003 shows instructions
 instead of a 500.
 
-> **Manual step:** run `supabase/migrations/0003_gallery.sql` in the Supabase SQL
-> editor to switch the gallery on. Until then the page explains what is missing
-> and the rest of the app is unaffected.
+> **Gallery switched on:** `0003_gallery.sql` was applied on 2026-10-26 and
+> verified in production — `/gallery` renders its filter chips and empty state
+> instead of the migration hint.
 
 ---
 
