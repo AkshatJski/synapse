@@ -10,7 +10,7 @@ local. Anything marked ✅ is verified in production, not "works on my machine".
 
 ---
 
-## Where we are now — v1.2 · 2026-10-27
+## Where we are now — v1.3 · 2026-10-27
 
 | Area | State |
 |---|---|
@@ -24,6 +24,7 @@ local. Anything marked ✅ is verified in production, not "works on my machine".
 | Sharing | opt-in `/p/<slug>`, read-only, revocable, anon RLS policy, generated OG card (D30–D33, D42) |
 | Gallery | **second opt-in** over shared rows, domain filter, no names, instant removal (D45) |
 | Analytics | Web Analytics page views + Speed Insights field Core Web Vitals; funnel as `[event]` logs (custom events are Pro-only) (D46, D48) |
+| Theming | **light/dark toggle** in the header; first visit follows the OS, choice persists, no flash (D50) |
 | Export | Markdown download (progress for the owner, none for visitors) + print styles (D42) |
 | Management | rename + delete, two-step confirm, papers survive delete (D40) |
 | Safety | PPR-safe rendering everywhere (`connection()`), daily quota 10/user, per-instance rate limits, security headers, RLS as the boundary (D44) |
@@ -50,6 +51,32 @@ and why `vercel logs` is part of the deploy loop (D37).
 4. **If it only fails in production, it will fail in production.** Every fix gets
    a local before/after or an offline test.
 5. **Small batches.** One phase = one demoable, revertible change.
+
+---
+
+## Shipped — v1.3 "Dark mode" · 2026-10-27
+
+**Problem.** `app/globals.css` already had a full `.dark` palette, but nothing
+ever put the `dark` class on `<html>`, so the app was permanently light.
+
+**What shipped**
+1. `next-themes` (already installed for the Toaster) wraps the app with
+   `attribute="class"`, `defaultTheme="system"`, `enableSystem` and
+   `disableTransitionOnChange`. Its inline script applies the saved theme before
+   the first paint, so there is no light flash (D50).
+2. A ghost `icon-sm` Sun/Moon toggle in the header and in the static header
+   fallback. The icon swap is pure CSS (`dark:block` / `dark:hidden`), so the
+   correct icon is painted immediately; the click reads the `<html>` class and
+   calls `setTheme()`.
+3. The Toaster moved inside the provider, so toasts follow the chosen theme. No
+   migration, no new dependency, and no cookie read — the static shell/PPR is
+   unchanged.
+
+**Acceptance criteria**
+- ✅ `lint`, `build` and all 10 offline specs pass.
+- ✅ Server HTML contains the toggle + the next-themes inline script; built CSS
+  contains `.dark`, `.dark\:block`, `.dark\:hidden`.
+- ⏳ Signed-in visual click-through of both themes on production.
 
 ---
 

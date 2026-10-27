@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { LayoutDashboard, LayoutGrid, Sparkles, User } from "lucide-react";
 
 import { signOut } from "@/app/actions/auth";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { isSupabaseConfigured } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
@@ -46,6 +47,7 @@ export async function SiteHeader() {
         </Link>
 
         <nav className="flex items-center gap-1 text-sm">
+          <ThemeToggle />
           <Button variant="ghost" size="sm" render={<Link href="/gallery" />}>
             <LayoutGrid className="size-4" />
             Gallery
@@ -86,7 +88,10 @@ export function SiteHeaderFallback() {
           <Sparkles className="size-4" />
           Synapse
         </span>
-        <span className="h-6 w-16 animate-pulse rounded bg-muted" />
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <span className="h-6 w-16 animate-pulse rounded bg-muted" />
+        </div>
       </div>
     </header>
   );

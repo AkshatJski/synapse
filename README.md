@@ -178,6 +178,7 @@ Phases, acceptance criteria and the full backlog: **[ROADMAP.md](ROADMAP.md)**.
 - [x] Security headers (narrow CSP) and per-user rate limits on both expensive routes
 - [x] Public gallery: second opt-in over shared roadmaps, domain filter, instant removal
 - [x] Web Analytics page views + Speed Insights field Core Web Vitals + server-side funnel events (`[event]` log lines)
+- [x] Light/dark theme toggle: follows the OS on first visit, persists the choice, no flash
 - [x] Paper discovery via OpenAlex (no key), with arXiv as the by-id fallback
 - [x] CI: lint, env-less build and ten offline regression specs on every push
 - [ ] Streaming roadmaps (progressive JSON steps as the model writes them)
