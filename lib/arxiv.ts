@@ -217,6 +217,40 @@ export function splitArxivId(canonicalId: string): { arxivId: string; version: s
   return { arxivId: match[1], version: match[2] ?? null };
 }
 
+/**
+ * Extracts a bare arXiv id from whatever the user pasted.
+ *
+ * Accepts bare ids (`1706.03762`), an `arXiv:` prefix, and abs/pdf links,
+ * including legacy ids (`hep-th/9901001`) and version suffixes. Returns null
+ * when the input does not contain a valid id, so callers reject before any
+ * network call. The host is ignored on purpose: an id is an id, and the server
+ * only ever fetches by that id (D41).
+ */
+export function arxivIdFromInput(input: string): string | null {
+  const raw = (input ?? "").trim();
+  if (raw.length === 0 || raw.length > 200) return null;
+
+  const link = /\/(?:abs|pdf)\//i.exec(raw);
+  if (link) {
+    const tail = raw
+      .slice(link.index + link[0].length)
+      .replace(/[?#].*$/, "")
+      .replace(/\/+$/, "")
+      .replace(/\.pdf$/i, "")
+      .replace(/v\d+$/i, "");
+    return isValidArxivId(tail) ? tail : null;
+  }
+
+  const bare = raw
+    .replace(/^arxiv:\s*/i, "")
+    .replace(/[?#].*$/, "")
+    .replace(/\/+$/, "")
+    .replace(/\.pdf$/i, "")
+    .replace(/v\d+$/i, "");
+
+  return isValidArxivId(bare) ? bare : null;
+}
+
 interface AtomLink {
   href: string;
   rel: string | null;

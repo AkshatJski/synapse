@@ -19,6 +19,11 @@ export const LANGUAGES = [
   "Go",
   "Java",
   "C++",
+  "C#",
+  "Kotlin",
+  "Swift",
+  "R",
+  "Julia",
 ] as const;
 export type Language = (typeof LANGUAGES)[number];
 
@@ -31,6 +36,16 @@ export const DOMAINS = [
   "Speech & Audio",
   "Robotics",
   "Recommender Systems",
+  "Time Series & Forecasting",
+  "Multimodal Learning",
+  "AI Agents",
+  "Federated Learning",
+  "Causal Inference",
+  "Information Retrieval",
+  "3D Vision",
+  "Video Understanding",
+  "AI for Science",
+  "Cybersecurity",
 ] as const;
 export type Domain = (typeof DOMAINS)[number];
 

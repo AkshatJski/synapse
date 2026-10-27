@@ -2,11 +2,22 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, Circle, Loader2, RefreshCw, Wand2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  Circle,
+  FileText,
+  Lightbulb,
+  Loader2,
+  RefreshCw,
+  Search,
+  Wand2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -17,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GENERATE_STAGES, type GenerateEvent, type GenerateStage } from "@/lib/generate-events";
+import { formatIdea, type ProjectIdea } from "@/lib/ideas";
 import { readNdjson } from "@/lib/ndjson";
 import type { PaperCandidate } from "@/lib/papers";
 import {
@@ -52,7 +64,20 @@ const STAGE_LABELS: Record<GenerateStage, string> = {
 
 type Phase = "form" | "papers" | "generating";
 
+type Mode = "search" | "own";
+
+type Busy = "find" | "shuffle" | "lookup" | "ideas" | null;
+
 type CandidatesResponse = { candidates: PaperCandidate[]; exhausted: boolean };
+
+/** Two-way source switch, styled like a small segmented control. */
+function tabClass(active: boolean): string {
+  return `flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+    active
+      ? "bg-primary text-primary-foreground"
+      : "text-muted-foreground hover:text-foreground"
+  }`;
+}
 
 type GenerateFormProps = {
   /** Prefill from `/dashboard?domain=…&language=…&skill=…` (project page). */
@@ -104,12 +129,17 @@ export function GenerateForm({
     oneOf(SKILL_LEVELS, initialSkill, "beginner"),
   );
 
+  const [mode, setMode] = useState<Mode>("search");
   const [phase, setPhase] = useState<Phase>("form");
-  const [busy, setBusy] = useState<"find" | "shuffle" | null>(null);
+  const [busy, setBusy] = useState<Busy>(null);
+  const [paperInput, setPaperInput] = useState("");
   const [candidates, setCandidates] = useState<PaperCandidate[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   /** Ids already shown, so "shuffle" returns different papers. */
   const [seen, setSeen] = useState<string[]>([]);
+  /** Null until the user asks; an empty array is a successful but empty answer. */
+  const [ideas, setIdeas] = useState<ProjectIdea[] | null>(null);
+  const [selectedIdea, setSelectedIdea] = useState<number | null>(null);
 
   const [stage, setStage] = useState<GenerateStage | null>(null);
   // null until the first stage event: the list is sliced from that stage, so a
@@ -129,6 +159,8 @@ export function GenerateForm({
     setCandidates(next);
     setSelectedId(next[0]?.arxivId ?? null);
     setSeen((current) => [...current, ...next.map((candidate) => candidate.arxivId)]);
+    setIdeas(null);
+    setSelectedIdea(null);
   }
 
   async function requestCandidates(exclude: string[]): Promise<CandidatesResponse | null> {
@@ -153,6 +185,99 @@ export function GenerateForm({
     }
 
     return { candidates: payload.candidates, exhausted: payload.exhausted ?? false };
+  }
+
+  async function requestPaper(paperId: string): Promise<CandidatesResponse | null> {
+    const response = await fetch("/api/papers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paperId }),
+    });
+
+    if (response.status === 401) {
+      router.push("/login?next=/dashboard");
+      return null;
+    }
+
+    const payload = (await response.json().catch(() => ({}))) as Partial<CandidatesResponse> & {
+      error?: string;
+    };
+
+    if (!response.ok || !payload.candidates) {
+      toast.error(payload.error ?? "Could not load that paper. Check the link or id.");
+      return null;
+    }
+
+    return { candidates: payload.candidates, exhausted: false };
+  }
+
+  async function handleLoadPaper(event: FormEvent) {
+    event.preventDefault();
+    if (busy || generating) return;
+
+    if (!paperInput.trim()) {
+      toast.error("Paste an arXiv link or id first.");
+      return;
+    }
+
+    setBusy("lookup");
+    try {
+      const result = await requestPaper(paperInput);
+      if (!result) return;
+
+      if (result.candidates.length === 0) {
+        toast.error("We could not find that paper on arXiv. Check the link or id.");
+        return;
+      }
+
+      setSeen([]);
+      applyCandidates(result.candidates);
+      setPhase("papers");
+    } catch {
+      toast.error("Network error — check your connection and try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleIdeas() {
+    if (!selectedId || busy || generating) return;
+
+    setBusy("ideas");
+    try {
+      const response = await fetch("/api/ideas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain, language, skillLevel, paperId: selectedId }),
+      });
+
+      if (response.status === 401) {
+        router.push("/login?next=/dashboard");
+        return;
+      }
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        ideas?: ProjectIdea[];
+        error?: string;
+      };
+
+      if (!response.ok || !payload.ideas) {
+        toast.error(payload.error ?? "Could not propose projects for this paper. Try again.");
+        return;
+      }
+
+      if (payload.ideas.length === 0) {
+        toast.error("No project ideas came back for this paper. Try again.");
+        return;
+      }
+
+      setIdeas(payload.ideas);
+      setSelectedIdea(payload.ideas.length > 0 ? 0 : null);
+    } catch {
+      toast.error("Network error — check your connection and try again.");
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function handleFindPapers(event: FormEvent) {
@@ -211,10 +336,23 @@ export function GenerateForm({
     setCandidates([]);
     setSelectedId(null);
     setSeen([]);
+    setIdeas(null);
+    setSelectedIdea(null);
+    resetProgress();
+  }
+
+  function switchMode(next: Mode) {
+    if (generating || next === mode) return;
+    setMode(next);
+    handleChangeOptions();
   }
 
   async function handleGenerate() {
     if (!selectedId || generating) return;
+
+    const chosenIdea = ideas && selectedIdea !== null ? ideas[selectedIdea] : null;
+    // Once ideas are on screen, "Build" means one of them, not a silent fallback.
+    if (mode === "own" && ideas !== null && !chosenIdea) return;
 
     setPhase("generating");
     resetProgress();
@@ -223,7 +361,13 @@ export function GenerateForm({
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain, language, skillLevel, paperId: selectedId }),
+        body: JSON.stringify({
+          domain,
+          language,
+          skillLevel,
+          paperId: selectedId,
+          ...(chosenIdea ? { projectIdea: formatIdea(chosenIdea) } : {}),
+        }),
       });
 
       // Everything that can be rejected up front (signed out, quota, bad input)
@@ -299,7 +443,57 @@ export function GenerateForm({
     <Card>
       <CardContent className="pt-6">
         {phase === "form" && (
-          <form onSubmit={handleFindPapers} className="flex flex-col gap-5">
+          <form
+            onSubmit={mode === "search" ? handleFindPapers : handleLoadPaper}
+            className="flex flex-col gap-5"
+          >
+            <div
+              className="flex w-full rounded-lg border p-1"
+              role="tablist"
+              aria-label="Where should the paper come from?"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "search"}
+                className={tabClass(mode === "search")}
+                onClick={() => switchMode("search")}
+                disabled={busy !== null}
+              >
+                <Search className="size-4" />
+                Find a paper
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "own"}
+                className={tabClass(mode === "own")}
+                onClick={() => switchMode("own")}
+                disabled={busy !== null}
+              >
+                <FileText className="size-4" />
+                I have a paper
+              </button>
+            </div>
+
+            {mode === "own" && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="paper-id">arXiv link or ID</Label>
+                <Input
+                  id="paper-id"
+                  value={paperInput}
+                  onChange={(event) => setPaperInput(event.target.value)}
+                  placeholder="https://arxiv.org/abs/1706.03762"
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={busy !== null}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Paste an abstract link or the bare id, e.g. 1706.03762.
+                </p>
+              </div>
+            )}
+
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="domain">Domain</Label>
@@ -357,16 +551,30 @@ export function GenerateForm({
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <Button type="submit" size="lg" disabled={busy !== null}>
-                {busy === "find" ? (
+              <Button
+                type="submit"
+                size="lg"
+                disabled={busy !== null || (mode === "own" && paperInput.trim().length === 0)}
+              >
+                {busy === "find" || busy === "lookup" ? (
                   <Loader2 className="size-4 animate-spin" />
+                ) : mode === "own" ? (
+                  <FileText className="size-4" />
                 ) : (
                   <Wand2 className="size-4" />
                 )}
-                {busy === "find" ? "Finding papers…" : "Find papers"}
+                {mode === "own"
+                  ? busy === "lookup"
+                    ? "Loading paper…"
+                    : "Load paper"
+                  : busy === "find"
+                    ? "Finding papers…"
+                    : "Find papers"}
               </Button>
               <span className="text-sm text-muted-foreground">
-                Free. You choose from three real papers before anything is generated.
+                {mode === "own"
+                  ? "You'll see three projects you can build before anything is generated."
+                  : "Free. You choose from three real papers before anything is generated."}
               </span>
             </div>
           </form>
@@ -376,30 +584,39 @@ export function GenerateForm({
           <div className="flex flex-col gap-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">Choose a paper</span>
+                <span className="font-medium text-foreground">
+                  {mode === "own" ? "Your paper" : "Choose a paper"}
+                </span>
                 <span aria-hidden>·</span>
                 <span>
                   {domain}, {language}, {skillLevel}
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={handleChangeOptions}>
-                  <ArrowLeft className="size-3.5" />
-                  Change options
-                </Button>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  onClick={handleShuffle}
+                  onClick={handleChangeOptions}
                   disabled={busy !== null}
                 >
-                  {busy === "shuffle" ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <RefreshCw className="size-3.5" />
-                  )}
-                  Shuffle
+                  <ArrowLeft className="size-3.5" />
+                  {mode === "own" ? "Change paper" : "Change options"}
                 </Button>
+                {mode === "search" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleShuffle}
+                    disabled={busy !== null}
+                  >
+                    {busy === "shuffle" ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="size-3.5" />
+                    )}
+                    Shuffle
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -436,13 +653,93 @@ export function GenerateForm({
               })}
             </fieldset>
 
+            {mode === "own" && ideas === null && (
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={handleIdeas}
+                  disabled={!selectedId || busy !== null}
+                >
+                  {busy === "ideas" ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Lightbulb className="size-4" />
+                  )}
+                  {busy === "ideas" ? "Finding projects…" : "See what you can build"}
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Three project ideas tailored to this paper. Free.
+                </span>
+              </div>
+            )}
+
+            {mode === "own" && ideas !== null && (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-medium">Pick a project</p>
+                  <p className="text-sm text-muted-foreground">
+                    You’ll get a full roadmap for the one you choose.
+                  </p>
+                </div>
+                <fieldset className="flex flex-col gap-3" disabled={busy !== null}>
+                  <legend className="sr-only">Project ideas</legend>
+                  {ideas.map((idea, index) => {
+                    const selected = selectedIdea === index;
+
+                    return (
+                      <label
+                        key={`${idea.title}-${index}`}
+                        className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition-colors ${
+                          selected ? "border-primary bg-primary/5" : "hover:border-primary/40"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="idea"
+                          value={index}
+                          checked={selected}
+                          onChange={() => setSelectedIdea(index)}
+                          className="mt-1 size-4 shrink-0 accent-primary"
+                        />
+                        <span className="flex flex-col gap-1">
+                          <span className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium leading-snug">{idea.title}</span>
+                            <span className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
+                              {idea.difficulty}
+                            </span>
+                          </span>
+                          <span className="text-sm text-muted-foreground">{idea.pitch}</span>
+                          <span className="text-xs text-muted-foreground">
+                            You’ll build: {idea.build}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </fieldset>
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center gap-3">
-              <Button size="lg" onClick={handleGenerate} disabled={!selectedId || busy !== null}>
+              <Button
+                size="lg"
+                onClick={handleGenerate}
+                disabled={
+                  !selectedId ||
+                  busy !== null ||
+                  (mode === "own" && ideas !== null && selectedIdea === null)
+                }
+              >
                 <Wand2 className="size-4" />
-                Build this roadmap
+                {mode === "own" && ideas !== null ? "Build this project" : "Build this roadmap"}
               </Button>
               <span className="text-sm text-muted-foreground">
-                Shuffling is free — it only costs you a generation when you build.
+                {mode === "own"
+                  ? ideas !== null
+                    ? "One generation credit for the project you picked."
+                    : "You can build directly, or see three project ideas first."
+                  : "Shuffling is free — it only costs you a generation when you build."}
               </span>
             </div>
           </div>

@@ -3,8 +3,9 @@
 **Read the paper. Then actually build it.**
 
 Synapse bridges academic research and practical engineering. Pick a domain, a
-language and a skill level — Synapse finds a recent arXiv paper and turns its
-dense abstract into a step-by-step project roadmap you can actually ship.
+language and a skill level — Synapse finds a recent arXiv paper, or you can paste
+one you already found, and turns its dense abstract into a step-by-step project
+roadmap you can actually ship.
 
 > Built entirely on free tiers: **OpenAlex** (discovery) + **arXiv** (fallback) ·
 > **Supabase** (Postgres, auth, RLS) · **Groq / Gemini** (LLM) ·
@@ -31,19 +32,23 @@ real share prints the roadmap's own title.</sub>
    TypeScript, Rust…) and a skill level (Beginner / Intermediate / Advanced).
 2. **Pick the paper** — Synapse shows three recent candidates with title,
    category, date and a short preview. Shuffle freely: nothing is generated and
-   no quota is spent until you choose. Or let it pick for you.
-3. **Generate** — progress streams back as it happens: the paper being read, the
+   no quota is spent until you choose. Or switch to **I have a paper** and paste
+   an arXiv link or id (`https://arxiv.org/abs/1706.03762`, `1706.03762`).
+3. **Choose what to build** — for a paper you brought, Synapse proposes three
+   project ideas tailored to it. Pick one, then generate its roadmap. The ideas
+   step is free and does not spend a generation credit.
+4. **Generate** — progress streams back as it happens: the paper being read, the
    planning step, the save. The LLM turns the abstract into an ELI5 summary,
    prerequisite concepts, and ordered build steps with code.
-4. **Build** — work through the roadmap, ticking steps off as you go. Rename or
+5. **Build** — work through the roadmap, ticking steps off as you go. Rename or
    delete any roadmap from the dashboard; deleting one also kills its public
    link. "Try another paper" starts a new roadmap on the same topic.
-5. **Share** — publish a read-only link (`/p/<slug>`) that anyone can open
+6. **Share** — publish a read-only link (`/p/<slug>`) that anyone can open
    without an account. Opt-in, revocable, with a generated link preview, and it
    never exposes your profile or your other roadmaps.
-6. **Keep it** — download the roadmap as Markdown or print it. Exports from a
+7. **Keep it** — download the roadmap as Markdown or print it. Exports from a
    shared link never include the owner's progress.
-7. **Browse** — the [public gallery](https://synapse-seven-ebon.vercel.app/gallery)
+8. **Browse** — the [public gallery](https://synapse-seven-ebon.vercel.app/gallery)
    shows roadmaps whose owners opted in a second time, filterable by domain. No
    names, no profiles, and one click removes a roadmap from it.
 
@@ -62,8 +67,9 @@ real share prints the roadmap's own title.</sub>
 
 <sub>Funnel events are written as `[event]` lines (`generate_started`,
 `generate_done`, `share_created`, `gallery_listed`) and read with
-`vercel logs`; page views come from Vercel Web Analytics. Custom Analytics
-events are Pro-only, so nothing pretends to send them on the free plan.</sub>
+`vercel logs`; page views come from Vercel Web Analytics and field Core Web
+Vitals from Speed Insights. Custom Analytics events are Pro-only, so nothing
+pretends to send them on the free plan.</sub>
 
 ## Stack
 
@@ -75,6 +81,7 @@ events are Pro-only, so nothing pretends to send them on the free plan.</sub>
 | Data | arXiv papers via OpenAlex (JSON); arXiv Atom API as the by-id fallback (`fast-xml-parser`) |
 | Database / auth | Supabase (Postgres + RLS, GitHub OAuth + email) |
 | AI | Google Gemini free tier (primary) + Groq free tier (automatic fallback) |
+| Observability | Vercel Web Analytics + Speed Insights (free Hobby tier) |
 | Markdown | react-markdown + rehype-highlight |
 
 ## Getting started
@@ -100,6 +107,7 @@ card instead of crashing.
 | `npm run lint` | ESLint |
 | `npm run verify:arxiv` | Smoke-test `lib/arxiv.ts` against the live arXiv API |
 | `npm run verify:openalex` | Offline OpenAlex mapping/retry spec (stubbed `fetch`) |
+| `npm run verify:ideas` | Offline arXiv-link parsing, ideas schema and chosen-idea prompt spec |
 | `npm run verify:offline` | All offline specs (no keys, no network, no database) |
 
 ## Project layout
@@ -117,11 +125,14 @@ app/
   p/[slug]/opengraph-image.tsx  link preview card (1200x630)
   error.tsx, not-found.tsx  error boundary and 404
   api/generate/route.ts OpenAlex/arXiv -> LLM -> Postgres, server-only, streams progress
-  api/papers/route.ts   candidate search for the picker (reads only)
+  api/papers/route.ts   candidate search, or by-id lookup for a pasted arXiv link
+  api/ideas/route.ts    three project ideas for a paper you brought (no DB write)
   actions/              server actions (sign out, toggle a step, sharing)
 lib/
   openalex.ts           OpenAlex discovery client (search + fetch by id)
   arxiv.ts              typed arXiv Atom client (fallback fetch by id)
+  paper-lookup.ts       shared by-id lookup: OpenAlex first, arXiv fallback
+  ideas.ts              zod contract for the three project ideas
   papers.ts             candidate ranking, dedupe and previews
   export.ts             roadmap -> Markdown (pure, testable)
   project-ops.ts        rename/delete/share/gallery rules over an injected client
@@ -156,6 +167,8 @@ Phases, acceptance criteria and the full backlog: **[ROADMAP.md](ROADMAP.md)**.
 - [x] Supabase schema, RLS, GitHub OAuth + email magic link
 - [x] `/api/generate` - LLM roadmap with strict JSON validation + repair retry
 - [x] Paper picker: three candidates, free shuffle, id-only handoff
+- [x] Bring your own paper: arXiv link/ID, server re-fetch, three project ideas before generation
+- [x] 18 domains and 12 languages in the pickers
 - [x] Project workspace with step tracking
 - [x] Public share links (read-only, opt-in, revocable) with generated OG cards
 - [x] Live generation progress (streamed stages, real paper title)
@@ -164,9 +177,9 @@ Phases, acceptance criteria and the full backlog: **[ROADMAP.md](ROADMAP.md)**.
 - [x] Rename / delete roadmaps, with the rules tested against a fake client
 - [x] Security headers (narrow CSP) and per-user rate limits on both expensive routes
 - [x] Public gallery: second opt-in over shared roadmaps, domain filter, instant removal
-- [x] Web Analytics page views + server-side funnel events (`[event]` log lines)
+- [x] Web Analytics page views + Speed Insights field Core Web Vitals + server-side funnel events (`[event]` log lines)
 - [x] Paper discovery via OpenAlex (no key), with arXiv as the by-id fallback
-- [x] CI: lint, env-less build and nine offline regression specs on every push
+- [x] CI: lint, env-less build and ten offline regression specs on every push
 - [ ] Streaming roadmaps (progressive JSON steps as the model writes them)
 
 ## License

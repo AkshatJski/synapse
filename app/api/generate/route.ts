@@ -30,6 +30,11 @@ const BodySchema = z.object({
   skillLevel: z.enum(SKILL_LEVELS),
   /** Present when the user picked a paper; absent means "surprise me". */
   paperId: z.string().trim().min(1).max(32).optional(),
+  /**
+   * The project idea the user picked from `/api/ideas`. Bounded prompt text,
+   * not a database field: the generated roadmap's own title/summary persist it.
+   */
+  projectIdea: z.string().trim().min(1).max(800).optional(),
 });
 
 /** JSON error with a message that is safe to show a user verbatim. */
@@ -131,7 +136,7 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return fail(400, "Pick a domain, a language and a valid skill level.", "BAD_REQUEST");
   }
-  const { domain, language, skillLevel, paperId } = parsed.data;
+  const { domain, language, skillLevel, paperId, projectIdea } = parsed.data;
 
   // ------------------------------------------------------------- 1. backend
   if (!isSupabaseConfigured()) {
@@ -186,6 +191,7 @@ export async function POST(request: Request) {
 
     logEvent("generate_started", {
       chosen: Boolean(paperId),
+      idea: Boolean(projectIdea),
       domain,
       language,
       skillLevel,
@@ -354,7 +360,7 @@ export async function POST(request: Request) {
 
     let roadmap;
     try {
-      roadmap = await generateRoadmap({ paper, domain, language, skillLevel });
+      roadmap = await generateRoadmap({ paper, domain, language, skillLevel, projectIdea });
     } catch (error) {
       if (error instanceof LlmError) {
         switch (error.code) {

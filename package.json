@@ -21,7 +21,8 @@
     "verify:export": "tsx scripts/verify-export.mts",
     "verify:actions": "tsx scripts/verify-actions.mts",
     "verify:limits": "tsx scripts/verify-limits.mts",
-    "verify:offline": "npm run verify:ndjson && npm run verify:papers && npm run verify:openalex && npm run verify:export && npm run verify:actions && npm run verify:limits && npm run verify:arxiv:retry && npm run verify:llm:json && npm run verify:llm:failover"
+    "verify:ideas": "tsx scripts/verify-ideas.mts",
+    "verify:offline": "npm run verify:ndjson && npm run verify:papers && npm run verify:openalex && npm run verify:export && npm run verify:actions && npm run verify:limits && npm run verify:arxiv:retry && npm run verify:llm:json && npm run verify:llm:failover && npm run verify:ideas"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

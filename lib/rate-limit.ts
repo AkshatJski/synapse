@@ -78,3 +78,5 @@ export class FixedWindowLimiter {
  */
 export const papersLimiter = new FixedWindowLimiter(30, 60_000);
 export const generateLimiter = new FixedWindowLimiter(6, 60_000);
+/** Ideas are an extra LLM call, but a cheap one; this only stops tight loops. */
+export const ideasLimiter = new FixedWindowLimiter(10, 60_000);

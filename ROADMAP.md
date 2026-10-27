@@ -10,23 +10,24 @@ local. Anything marked ✅ is verified in production, not "works on my machine".
 
 ---
 
-## Where we are now — v1.1 · 2026-10-27
+## Where we are now — v1.2 · 2026-10-27
 
 | Area | State |
 |---|---|
 | Paper discovery | **OpenAlex** (no key, source-filtered to arXiv) with the arXiv Atom API as the by-id fallback; one bounded 429 retry (D47, BUG-016) |
+| Paper choice | **find one or bring your own** — paste an arXiv link/ID; the server extracts the id and re-fetches it; free shuffle, id-only handoff, no quota spent until you build (D41, D49) |
+| Project ideas | **three tailored ideas before generation** for a paper you brought; free, separate 10/min limiter, no daily-quota spend (D49) |
 | arXiv client | typed, retrying, backoff-aware; 429 retries once with `Retry-After`, other 4xx fail fast (BUG-010/016) |
-| Generation | Gemini primary → Groq fallback, strict zod contract, one repair retry (BUG-011/012/013) |
-| Paper choice | **you pick from three candidates** — free shuffle, id-only handoff, no quota spent until you build (D41) |
+| Generation | Gemini primary → Groq fallback, strict zod contract, one repair retry; a chosen idea is bounded prompt text, no schema change (BUG-011/012/013, D49) |
 | Progress | **streamed** stages from the server: searching → reading (real paper title) → planning → saving (D39) |
 | Workspace | roadmaps, ELI5 summary, prerequisites, roadmap/paper tabs, optimistic step tracking |
 | Sharing | opt-in `/p/<slug>`, read-only, revocable, anon RLS policy, generated OG card (D30–D33, D42) |
 | Gallery | **second opt-in** over shared rows, domain filter, no names, instant removal (D45) |
-| Analytics | Web Analytics page views; funnel as `[event]` logs (custom events are Pro-only) (D46) |
+| Analytics | Web Analytics page views + Speed Insights field Core Web Vitals; funnel as `[event]` logs (custom events are Pro-only) (D46, D48) |
 | Export | Markdown download (progress for the owner, none for visitors) + print styles (D42) |
 | Management | rename + delete, two-step confirm, papers survive delete (D40) |
 | Safety | PPR-safe rendering everywhere (`connection()`), daily quota 10/user, per-instance rate limits, security headers, RLS as the boundary (D44) |
-| CI | lint + **env-less** build + 9 offline specs, ~64 s, green on every push (D38) |
+| CI | lint + **env-less** build + 10 offline specs, green on every push (D38) |
 | Bugs | 16 logged, 15 fixed, 0 open (`report.md`) |
 
 ### What the last three phases taught us
@@ -49,6 +50,43 @@ and why `vercel logs` is part of the deploy loop (D37).
 4. **If it only fails in production, it will fail in production.** Every fix gets
    a local before/after or an offline test.
 5. **Small batches.** One phase = one demoable, revertible change.
+
+---
+
+## Shipped — v1.2 "Bring your own paper" · 2026-10-27
+
+**Problem.** Discovery was the only way in. If you already had a paper — from a
+course, a lab, or a link a friend sent — Synapse ignored it. The pickers also
+covered only the original eight domains and seven languages.
+
+**What shipped**
+1. A **Find a paper / I have a paper** toggle on the dashboard form. Paste an
+   arXiv abstract/PDF link, an `arXiv:` id, or a bare id; the server extracts the
+   id, validates it, and re-fetches through OpenAlex → arXiv. The browser never
+   sends paper content (D41, D49).
+2. **Three project ideas** tailored to the paper, language and level. Pick one,
+   then `/api/generate` builds the roadmap around it. The ideas call is free and
+   does not spend the 10/day generation quota; it has its own 10/min limiter.
+3. The chosen idea travels as bounded prompt text (`projectIdea`, max 800
+   chars), not a database column, so there is no migration. The roadmap's own
+   title and summary persist what was built.
+4. **10 more domains** (Time Series, Multimodal, AI Agents, Federated Learning,
+   Causal Inference, Information Retrieval, 3D Vision, Video Understanding, AI
+   for Science, Cybersecurity) and **5 more languages** (C#, Kotlin, Swift, R,
+   Julia). Enum-only; no migration.
+5. **Speed Insights** for field Core Web Vitals, next to Web Analytics. Preview
+   now carries the same five keys as `.env.local` (`GEMINI_MODEL` is optional
+   because the code defaults it) (D48).
+
+**Acceptance criteria**
+- ✅ `verify:ideas` (10th offline spec) covers URL/ID parsing, version and legacy
+  ids, the ideas schema, dedupe, and the chosen-idea prompt.
+- ✅ Live Gemini run: 3 ideas in ~7.9 s; the chosen idea produced a 6-step
+  roadmap in ~28 s whose title matched the idea.
+- ✅ `lint`, `build` and all 10 offline specs pass; `/api/ideas` is in the build
+  manifest.
+- ⏳ Signed-in click-through of the full UI (paste → ideas → build) on
+  production; CI has no account.
 
 ---
 
