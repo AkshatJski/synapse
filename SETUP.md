@@ -75,10 +75,13 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...
 GEMINI_API_KEY=AIza...
 GROQ_API_KEY=gsk_...          # optional fallback
 LLM_PROVIDER=gemini
+# OPENALEX_MAILTO=you@example.com   # optional, no key; joins the polite pool
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` is **not** required by the current code. Do not add
-it unless a future server job genuinely needs to bypass RLS.
+it unless a future server job genuinely needs to bypass RLS. Paper discovery
+(OpenAlex) needs **no key at all**; `OPENALEX_MAILTO` is only a courtesy contact
+address, and the app works without it.
 
 ## 4. Run
 
@@ -93,9 +96,10 @@ magic link → pick a domain, language and level.
 
 | Check | Expected |
 |---|---|
-| `npm run build` | succeeds, 6 routes |
+| `npm run build` | succeeds, 11 routes |
 | `npm run lint` | clean |
-| `npm run verify:arxiv` | 3 real papers printed |
+| `npm run verify:arxiv` | 3 real papers printed (fallback client) |
+| `npm run verify:openalex` | offline mapping/retry spec passes (no key) |
 | `/dashboard` without env | amber "Connect Supabase" card, no crash |
 | `POST /api/generate` without env | `503 { "code": "NOT_CONFIGURED" }` |
 
@@ -129,6 +133,7 @@ vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY production
 vercel env add GEMINI_API_KEY production
 vercel env add GROQ_API_KEY production      # optional, enables failover
 vercel env add LLM_PROVIDER production      # "gemini"
+# vercel env add OPENALEX_MAILTO production # optional, no key required
 ```
 
 Repeat with `preview` (and `development` if you use `vercel env pull`). Then

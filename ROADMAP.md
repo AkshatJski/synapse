@@ -10,11 +10,12 @@ local. Anything marked ✅ is verified in production, not "works on my machine".
 
 ---
 
-## Where we are now — v0.3 · 2026-10-26
+## Where we are now — v1.1 · 2026-10-27
 
 | Area | State |
 |---|---|
-| arXiv client | typed, retrying, backoff-aware, refuses to retry a 4xx (BUG-010) |
+| Paper discovery | **OpenAlex** (no key, source-filtered to arXiv) with the arXiv Atom API as the by-id fallback; one bounded 429 retry (D47, BUG-016) |
+| arXiv client | typed, retrying, backoff-aware; 429 retries once with `Retry-After`, other 4xx fail fast (BUG-010/016) |
 | Generation | Gemini primary → Groq fallback, strict zod contract, one repair retry (BUG-011/012/013) |
 | Paper choice | **you pick from three candidates** — free shuffle, id-only handoff, no quota spent until you build (D41) |
 | Progress | **streamed** stages from the server: searching → reading (real paper title) → planning → saving (D39) |
@@ -25,8 +26,8 @@ local. Anything marked ✅ is verified in production, not "works on my machine".
 | Export | Markdown download (progress for the owner, none for visitors) + print styles (D42) |
 | Management | rename + delete, two-step confirm, papers survive delete (D40) |
 | Safety | PPR-safe rendering everywhere (`connection()`), daily quota 10/user, per-instance rate limits, security headers, RLS as the boundary (D44) |
-| CI | lint + **env-less** build + 8 offline specs, ~57 s, green on every push (D38) |
-| Bugs | 15 logged, 14 fixed, 0 open (`report.md`) |
+| CI | lint + **env-less** build + 9 offline specs, ~64 s, green on every push (D38) |
+| Bugs | 16 logged, 15 fixed, 0 open (`report.md`) |
 
 ### What the last three phases taught us
 
@@ -109,8 +110,23 @@ roadmap and open it in an editor without cleanup.
 | **Timing instrumentation** | ✅ `[generate] timings { paperId, chosen, paperMs, llmMs, saveMs, totalMs }` |
 | **Accessibility pass** | ✅ skip link, `id="main"`, `aria-busy`, `prefers-reduced-motion` |
 
-Exit test: CI runs eight offline specs; headers visible on a real `next start`
+Exit test: CI runs nine offline specs; headers visible on a real `next start`
 response; the quota and limit paths return the documented status codes.
+
+---
+
+## Shipped — v1.1 "Discovery that doesn't get throttled" · 2026-10-27
+
+| Item | State |
+|---|---|
+| **OpenAlex discovery** | ✅ `lib/openalex.ts`; `locations.source.id:S4306400194` + a six-month floor; domain-only relevance search; no key, 100k/day (D47) |
+| **arXiv fallback** | ✅ a chosen paper is looked up through OpenAlex first, then `getArxivPaper(id)`; the id-only handoff is unchanged (D41) |
+| **Honest 429 copy** | ✅ "rate-limiting … try again in about a minute" instead of "not responding"; one retry with `Retry-After`, other 4xx still fail fast (BUG-016) |
+| **Regression coverage** | ✅ `verify:openalex` (9th offline spec) + amended `verify:arxiv:retry` |
+
+Exit test: all eight domains return three candidates without calling
+`export.arxiv.org`; a chosen paper resolves through OpenAlex; a stubbed 429
+produces the rate-limit copy and exactly one retry.
 
 ---
 

@@ -6,8 +6,9 @@ Synapse bridges academic research and practical engineering. Pick a domain, a
 language and a skill level — Synapse finds a recent arXiv paper and turns its
 dense abstract into a step-by-step project roadmap you can actually ship.
 
-> Built entirely on free tiers: **arXiv** (papers) · **Supabase** (Postgres, auth,
-> RLS) · **Groq / Gemini** (LLM) · **Vercel** (hosting). No paid APIs.
+> Built entirely on free tiers: **OpenAlex** (discovery) + **arXiv** (fallback) ·
+> **Supabase** (Postgres, auth, RLS) · **Groq / Gemini** (LLM) ·
+> **Vercel** (hosting). No paid APIs, no API keys for papers.
 
 **Live:** <https://synapse-seven-ebon.vercel.app>
 
@@ -71,7 +72,7 @@ events are Pro-only, so nothing pretends to send them on the free plan.</sub>
 | Framework | Next.js 16 (App Router, React 19, Turbopack) |
 | Language | TypeScript (strict) |
 | UI | Tailwind CSS v4, shadcn/ui (`base-nova`), lucide-react, sonner |
-| Data | arXiv Atom API (`fast-xml-parser`) |
+| Data | arXiv papers via OpenAlex (JSON); arXiv Atom API as the by-id fallback (`fast-xml-parser`) |
 | Database / auth | Supabase (Postgres + RLS, GitHub OAuth + email) |
 | AI | Google Gemini free tier (primary) + Groq free tier (automatic fallback) |
 | Markdown | react-markdown + rehype-highlight |
@@ -98,6 +99,7 @@ card instead of crashing.
 | `npm run build` | Production build + type check |
 | `npm run lint` | ESLint |
 | `npm run verify:arxiv` | Smoke-test `lib/arxiv.ts` against the live arXiv API |
+| `npm run verify:openalex` | Offline OpenAlex mapping/retry spec (stubbed `fetch`) |
 | `npm run verify:offline` | All offline specs (no keys, no network, no database) |
 
 ## Project layout
@@ -114,11 +116,12 @@ app/
   p/[slug]/page.tsx     public read-only share view
   p/[slug]/opengraph-image.tsx  link preview card (1200x630)
   error.tsx, not-found.tsx  error boundary and 404
-  api/generate/route.ts arXiv -> LLM -> Postgres, server-only, streams progress
+  api/generate/route.ts OpenAlex/arXiv -> LLM -> Postgres, server-only, streams progress
   api/papers/route.ts   candidate search for the picker (reads only)
   actions/              server actions (sign out, toggle a step, sharing)
 lib/
-  arxiv.ts              typed arXiv Atom client (search + fetch by id)
+  openalex.ts           OpenAlex discovery client (search + fetch by id)
+  arxiv.ts              typed arXiv Atom client (fallback fetch by id)
   papers.ts             candidate ranking, dedupe and previews
   export.ts             roadmap -> Markdown (pure, testable)
   project-ops.ts        rename/delete/share/gallery rules over an injected client
@@ -162,7 +165,8 @@ Phases, acceptance criteria and the full backlog: **[ROADMAP.md](ROADMAP.md)**.
 - [x] Security headers (narrow CSP) and per-user rate limits on both expensive routes
 - [x] Public gallery: second opt-in over shared roadmaps, domain filter, instant removal
 - [x] Web Analytics page views + server-side funnel events (`[event]` log lines)
-- [x] CI: lint, env-less build and eight offline regression specs on every push
+- [x] Paper discovery via OpenAlex (no key), with arXiv as the by-id fallback
+- [x] CI: lint, env-less build and nine offline regression specs on every push
 - [ ] Streaming roadmaps (progressive JSON steps as the model writes them)
 
 ## License
