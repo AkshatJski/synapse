@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Suspense } from "react";
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 import { SiteHeader, SiteHeaderFallback } from "@/components/site-header";
 import { Toaster } from "@/components/ui/sonner";
@@ -58,6 +59,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         {/* Free page views on Hobby; custom events need Pro, so the funnel is
             logged server-side in lib/events.ts instead (D45). */}
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
