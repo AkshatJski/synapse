@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { ArxivError, isTransientArxivError, searchArxivPapers } from "@/lib/arxiv";
+import { ArxivError, isTransientArxivError } from "@/lib/arxiv";
 import { isSupabaseConfigured } from "@/lib/env";
+import { searchRecentArxiv } from "@/lib/openalex";
 import { rankCandidates, toCandidate } from "@/lib/papers";
 import { DOMAINS, LANGUAGES } from "@/lib/roadmap";
 import { papersLimiter } from "@/lib/rate-limit";
@@ -14,8 +15,8 @@ const SEARCH_POOL = 20;
 const CANDIDATES_SHOWN = 3;
 
 const BodySchema = z.object({
-  // Enum, not free text: it bounds the number of distinct arXiv queries this
-  // endpoint can ever issue (DOMAINS x LANGUAGES), and all of them are cached.
+  // Enum, not free text: it bounds the number of distinct paper queries this
+  // endpoint can ever issue (DOMAINS), and all of them are cached.
   domain: z.enum(DOMAINS),
   language: z.enum(LANGUAGES),
   /** Papers the user has already seen, so "shuffle" can return new ones. */
@@ -74,37 +75,35 @@ export async function POST(request: Request) {
 
   let papers;
   try {
-    papers = await searchArxivPapers(`${domain} ${language}`, SEARCH_POOL);
-    if (papers.length === 0) {
-      // Same second chance as the generate pipeline: the language term can filter
-      // out every relevant hit.
-      papers = await searchArxivPapers(domain, SEARCH_POOL, { sortBy: "submittedDate" });
-    }
+    papers = await searchRecentArxiv(domain, SEARCH_POOL);
   } catch (error) {
     if (error instanceof ArxivError) {
-      console.error("[papers] arxiv failed", {
+      console.error("[papers] openalex failed", {
         code: error.code,
         status: error.status,
-        query: `${domain} ${language}`,
+        domain,
       });
 
+      const transient = isTransientArxivError(error);
       return fail(
-        isTransientArxivError(error) ? 503 : 400,
-        isTransientArxivError(error)
-          ? "arXiv is not responding right now. Try again in a moment."
-          : "That search could not be run against arXiv. Try a broader domain.",
+        transient ? 503 : 400,
+        error.code === "RATE_LIMITED"
+          ? "The paper index is rate-limiting requests right now — try again in about a minute."
+          : transient
+            ? "The paper index is not responding right now. Try again in a moment."
+            : "That search could not be run. Try a broader domain.",
         error.code,
       );
     }
 
-    console.error("[papers] arxiv threw a non-ArxivError", error);
-    return fail(502, "Could not reach arXiv.", "ARXIV_FAILED");
+    console.error("[papers] openalex threw a non-ArxivError", error);
+    return fail(502, "Could not reach the paper index.", "OPENALEX_FAILED");
   }
 
   if (papers.length === 0) {
     return fail(
       404,
-      "No arXiv paper matched that combination. Try a broader domain.",
+      "No recent paper matched that domain. Try a broader domain.",
       "NO_PAPER",
     );
   }

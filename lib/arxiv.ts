@@ -21,10 +21,13 @@ export const ARXIV_API_URL = "https://export.arxiv.org/api/query";
 // arXiv's API is normally fast (1-3s) but has been observed taking 16-65s under
 // load. A 15s budget guaranteed failure exactly when users retried hardest.
 const REQUEST_TIMEOUT_MS = 35_000;
-// Two attempts, never three: a 429 is a decision from arXiv, not an accident.
+// Two attempts, never three. A 429 gets the one retry the docs allow; every
+// other 4xx is a decision from arXiv and is not retried at all.
 const MAX_ATTEMPTS = 2;
 // arXiv asks for ~3 seconds between requests; anything shorter earns more 429s.
 const RETRY_BASE_DELAY_MS = 3_000;
+// A Retry-After longer than this would make the request useless anyway.
+const RETRY_MAX_DELAY_MS = 5_000;
 const MAX_RESULTS_LIMIT = 50;
 const DEFAULT_MAX_RESULTS = 10;
 const USER_AGENT = "Synapse/0.1 (academic-paper-to-project-roadmap)";
@@ -192,6 +195,20 @@ const xmlParser = new XMLParser({
 
 const ARXIV_ID_PATTERN = /\/abs\/(.+?)(v\d+)?$/i;
 
+const ARXIV_BARE_ID_PATTERN = /^(?:\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?\/\d{7})$/i;
+
+/**
+ * True for a bare arXiv identifier (version suffix excluded).
+ *
+ * Exported because OpenAlex needs the same gate before it embeds an id in a
+ * filter: the browser must never be able to turn the lookup into an arbitrary
+ * URL fetch (D41).
+ */
+export function isValidArxivId(value: string): boolean {
+  const id = (value ?? "").trim();
+  return id.length > 0 && id.length <= 32 && ARXIV_BARE_ID_PATTERN.test(id);
+}
+
 /** Splits "http://arxiv.org/abs/2301.12345v2" into id + version. */
 export function splitArxivId(canonicalId: string): { arxivId: string; version: string | null } {
   const trimmed = canonicalId.trim().replace(/[?#].*$/, "");
@@ -353,13 +370,34 @@ function isAbortError(error: unknown): boolean {
 }
 
 /**
+ * Reads `Retry-After` (seconds or HTTP-date) and clamps it to a usable range.
+ * Shared with the OpenAlex client: both providers answer 429 with this header.
+ */
+export function retryAfterDelayMs(response: Response, fallbackMs = RETRY_BASE_DELAY_MS): number {
+  const raw = response.headers.get("retry-after");
+  if (raw) {
+    const seconds = Number(raw);
+    if (Number.isFinite(seconds) && seconds >= 0) {
+      return Math.min(seconds * 1000, RETRY_MAX_DELAY_MS);
+    }
+
+    const date = Date.parse(raw);
+    if (!Number.isNaN(date)) {
+      return Math.min(Math.max(0, date - Date.now()), RETRY_MAX_DELAY_MS);
+    }
+  }
+
+  return Math.min(fallbackMs, RETRY_MAX_DELAY_MS);
+}
+
+/**
  * Fetches the Atom feed with bounded retries.
  *
  * Retry policy:
- *  - 429        -> arXiv rate limiter. Do NOT retry: their guidance is to back
- *                  off, and retrying inside the same request only deepens the
- *                  throttle while burning another timeout window.
- *  - 503 / 5xx  -> transient server fault        -> retry once, 3s apart
+ *  - 429        -> arXiv rate limiter. Retry ONCE after Retry-After (capped at
+ *                  5s, 3s default), then surface RATE_LIMITED. This is the one
+ *                  documented exception to "never retry a 4xx" (BUG-016).
+ *  - 503 / 5xx  -> transient server fault        -> retry once
  *  - other 4xx  -> our request is wrong          -> fail fast, retrying cannot help
  *  - timeout    -> retry once
  */
@@ -367,6 +405,8 @@ async function fetchAtomFeed(url: string, revalidateSeconds: number): Promise<st
   let lastError: ArxivError | undefined;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    let waitMs = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1); // 3s (arXiv's guidance)
+
     try {
       const response = await fetch(url, {
         method: "GET",
@@ -379,18 +419,15 @@ async function fetchAtomFeed(url: string, revalidateSeconds: number): Promise<st
         next: { revalidate: revalidateSeconds },
       });
 
-      if (response.status === 429) {
-        throw new ArxivError("RATE_LIMITED", "arXiv is rate limiting requests right now.", {
-          status: response.status,
-        });
-      }
-
-      if (response.status === 503) {
+      if (response.status === 429 || response.status === 503) {
         lastError = new ArxivError(
           "RATE_LIMITED",
-          "arXiv is temporarily unavailable.",
+          response.status === 429
+            ? "arXiv is rate limiting requests right now."
+            : "arXiv is temporarily unavailable.",
           { status: response.status },
         );
+        waitMs = retryAfterDelayMs(response);
       } else if (!response.ok) {
         throw new ArxivError("HTTP_ERROR", `arXiv responded with HTTP ${response.status}.`, {
           status: response.status,
@@ -404,11 +441,8 @@ async function fetchAtomFeed(url: string, revalidateSeconds: number): Promise<st
       }
     } catch (error) {
       if (error instanceof ArxivError) {
-        // 429 and 4xx are decisions, not accidents: retrying cannot help.
-        if (
-          error.code === "RATE_LIMITED" ||
-          (error.code === "HTTP_ERROR" && (error.status ?? 500) < 500)
-        ) {
+        // Every 4xx except the documented 429 is a decision: retrying cannot help.
+        if (error.code === "HTTP_ERROR" && (error.status ?? 500) < 500) {
           throw error;
         }
         lastError = error;
@@ -424,7 +458,7 @@ async function fetchAtomFeed(url: string, revalidateSeconds: number): Promise<st
     }
 
     if (attempt < MAX_ATTEMPTS) {
-      await sleep(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1)); // 3s (arXiv's guidance)
+      await sleep(waitMs);
     }
   }
 
@@ -442,7 +476,7 @@ async function fetchAtomFeed(url: string, revalidateSeconds: number): Promise<st
  * an exception, so the caller decides how to present it.
  *
  * @throws {ArxivError} INVALID_QUERY (bad input), PARSE_ERROR (bad feed), or
- *   TIMEOUT / NETWORK_ERROR / RATE_LIMITED / HTTP_ERROR after 3 attempts.
+ *   TIMEOUT / NETWORK_ERROR / RATE_LIMITED / HTTP_ERROR after 2 attempts.
  */
 export async function searchArxivPapers(
   query: string,
@@ -483,8 +517,7 @@ export async function getArxivPaper(
   const id = (arxivId ?? "").trim();
 
   // Modern: 2301.12345 / 2301.1234 · legacy: cs/0112017, math.GT/0309136
-  const valid = /^(?:\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?\/\d{7})$/i.test(id);
-  if (id.length > 32 || !valid) {
+  if (!isValidArxivId(id)) {
     throw new ArxivError("INVALID_QUERY", "That does not look like an arXiv identifier.");
   }
 

@@ -68,3 +68,13 @@ export function resolveLlmProviders(): LlmCandidate[] {
 export function resolveLlmProvider(): LlmCandidate | null {
   return resolveLlmProviders()[0] ?? null;
 }
+
+/* -------------------------------------------------------------------------- */
+/*  OpenAlex (paper discovery)                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Optional contact address for OpenAlex's "polite pool" — no key, no account,
+ * no paid tier. An empty value is fine; OpenAlex simply has no one to contact.
+ */
+export const OPENALEX_MAILTO = process.env.OPENALEX_MAILTO ?? "";

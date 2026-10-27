@@ -5,12 +5,12 @@ import {
   ArxivError,
   getArxivPaper,
   isTransientArxivError,
-  searchArxivPapers,
   type ArxivPaper,
 } from "@/lib/arxiv";
 import { isSupabaseConfigured } from "@/lib/env";
 import type { GenerateEvent } from "@/lib/generate-events";
 import { generateRoadmap, LlmError } from "@/lib/llm";
+import { getArxivPaperByOpenAlex, searchRecentArxiv } from "@/lib/openalex";
 import { DOMAINS, LANGUAGES, SKILL_LEVELS } from "@/lib/roadmap";
 import { logEvent } from "@/lib/events";
 import { generateLimiter } from "@/lib/rate-limit";
@@ -103,7 +103,7 @@ function streamPipeline(run: (send: Send) => Promise<void>): Response {
 }
 
 /**
- * Relevance is what arXiv sorts by; recency is what a learner wants.
+ * Relevance is what the paper index sorts by; recency is what a learner wants.
  * Keep the relevance order, but prefer papers from the last five years.
  */
 function pickPaper(papers: ArxivPaper[]): ArxivPaper | null {
@@ -202,9 +202,21 @@ export async function POST(request: Request) {
       send({ type: "stage", stage: "reading" });
 
       try {
-        const fetched = await getArxivPaper(paperId);
+        // OpenAlex is the happy path; arXiv is the fallback for records it has
+        // not indexed. An invalid id is a client error and never falls back.
+        const viaOpenAlex = await getArxivPaperByOpenAlex(paperId).catch((error: unknown) => {
+          if (error instanceof ArxivError && error.code === "INVALID_QUERY") throw error;
+
+          console.warn("[generate] openalex lookup failed; falling back to arxiv", {
+            paperId,
+            code: error instanceof ArxivError ? error.code : "UNKNOWN",
+          });
+          return null;
+        });
+
+        const fetched = viaOpenAlex ?? (await getArxivPaper(paperId));
         if (!fetched) {
-          streamFail(404, "That paper is no longer available on arXiv. Pick another one.", "NO_PAPER");
+          streamFail(404, "That paper is no longer available. Pick another one.", "NO_PAPER");
           return;
         }
         paper = fetched;
@@ -223,16 +235,20 @@ export async function POST(request: Request) {
             error.code === "INVALID_QUERY" ? 400 : isTransientArxivError(error) ? 503 : 502,
             error.code === "INVALID_QUERY"
               ? "That paper identifier is not valid. Pick a paper from the list."
-              : isTransientArxivError(error)
-                ? "arXiv is not responding right now. Please try again."
-                : "Could not load that paper from arXiv.",
+              : error.code === "RATE_LIMITED"
+                ? error.status === 429
+                  ? "The paper index is rate-limiting requests right now. Wait about a minute, then try again."
+                  : "The paper index is temporarily unavailable. Wait a minute, then try again."
+                : isTransientArxivError(error)
+                  ? "The paper index is not responding right now. Please try again."
+                  : "Could not load that paper. Pick another one.",
             error.code,
           );
           return;
         }
 
         console.error("[generate] paper lookup threw", { elapsedMs, error });
-        streamFail(502, "Could not load that paper from arXiv.", "ARXIV_FAILED");
+        streamFail(502, "Could not load that paper.", "PAPER_LOOKUP_FAILED");
         return;
       }
     } else {
@@ -240,31 +256,26 @@ export async function POST(request: Request) {
       send({ type: "stage", stage: "searching" });
 
       try {
-        papers = await searchArxivPapers(`${domain} ${language}`, 8);
-        if (papers.length === 0) {
-          // Second chance with a narrower query: the language term may have filtered
-          // out every relevant paper.
-          papers = await searchArxivPapers(domain, 8, { sortBy: "submittedDate" });
-        }
+        papers = await searchRecentArxiv(domain, 8);
       } catch (error) {
         const elapsedMs = Date.now() - arxivStartedAt;
 
         if (error instanceof ArxivError) {
           // This log line is the whole point: without it an outage produces a vague
           // message for the user and nothing at all for whoever debugs it.
-          console.error("[generate] arxiv failed", {
+          console.error("[generate] openalex failed", {
             code: error.code,
             status: error.status,
             elapsedMs,
-            query: `${domain} ${language}`,
+            domain,
           });
 
           if (error.code === "RATE_LIMITED") {
             streamFail(
               503,
               error.status === 429
-                ? "arXiv is rate-limiting requests right now. Wait about a minute, then try again."
-                : "arXiv is temporarily unavailable. Wait a minute, then try again.",
+                ? "The paper index is rate-limiting requests right now. Wait about a minute, then try again."
+                : "The paper index is temporarily unavailable. Wait a minute, then try again.",
               error.code,
             );
             return;
@@ -273,15 +284,15 @@ export async function POST(request: Request) {
           streamFail(
             isTransientArxivError(error) ? 503 : 400,
             isTransientArxivError(error)
-              ? "The paper library (arXiv) is not responding right now. Please try again in a moment."
-              : "That search could not be run against arXiv. Try a broader domain.",
+              ? "The paper index is not responding right now. Please try again in a moment."
+              : "That search could not be run. Try a broader domain.",
             error.code,
           );
           return;
         }
 
-        console.error("[generate] arxiv threw a non-ArxivError", { elapsedMs, error });
-        streamFail(502, "Could not reach arXiv.", "ARXIV_FAILED");
+        console.error("[generate] openalex threw a non-ArxivError", { elapsedMs, error });
+        streamFail(502, "Could not reach the paper index.", "OPENALEX_FAILED");
         return;
       }
 
@@ -289,7 +300,7 @@ export async function POST(request: Request) {
       if (!picked) {
         streamFail(
           404,
-          "No arXiv paper matched that combination. Try a broader domain such as “Computer Vision”.",
+          "No recent paper matched that domain. Try a broader domain such as “Computer Vision”.",
           "NO_PAPER",
         );
         return;
